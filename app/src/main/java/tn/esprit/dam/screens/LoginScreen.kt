@@ -1,13 +1,8 @@
 package tn.esprit.dam.screens
 
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.BorderStroke // Required for OutlinedButton border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +19,8 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -44,7 +41,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -52,55 +48,54 @@ import androidx.navigation.compose.rememberNavController
 import tn.esprit.dam.R
 import tn.esprit.dam.ui.theme.AppTheme // IMPORTANT: Import the theme
 
-// Public function called by MainActivity
+// -----------------------------------------------------------------------------
+// --- PUBLIC ENTRY POINT - Still accepts state/toggle but doesn't use them ---
+// -----------------------------------------------------------------------------
 @Composable
-fun LoginScreen(navController: NavController) {
-    LoginScreenWrapper(navController)
+fun LoginScreen(
+    navController: NavController,
+    // Kept for compatibility with the NavHost signature
+    isDarkTheme: Boolean = false,
+    onToggleTheme: () -> Unit = {}
+) {
+    LoginScreenContent(
+        navController = navController
+    )
 }
 
-// --- Wrapper to hold local state and apply AppTheme locally ---
-@Composable
-fun LoginScreenWrapper(navController: NavController) {
-    // LOCAL STATE: The theme state is kept here
-    var isDarkTheme by remember { mutableStateOf(false) }
-
-    // LOCAL THEME WRAPPER: AppTheme is applied only to the LoginScreen content.
-    AppTheme(isDarkTheme = isDarkTheme) {
-        LoginScreenContent(
-            navController = navController,
-            isDarkTheme = isDarkTheme,
-            onThemeToggle = { isDarkTheme = it }
-        )
-    }
-}
-
-
+// -----------------------------------------------------------------------------
+// --- CONTENT COMPOSABLE (Theme parameters are now removed from content) ---
+// -----------------------------------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreenContent(
-    navController: NavController,
-    isDarkTheme: Boolean,
-    onThemeToggle: (Boolean) -> Unit
+    navController: NavController
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var rememberMe by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
 
-    // --- USE GLOBAL COLORS VIA APP THEME ---
-    val colors = AppTheme.colors // Accesses the animated colors from AppTheme
-    val primaryGreen = colors.primaryGreen
+    // --- USE STANDARD MATERIAL THEME COLORS ---
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val cardSurfaceColor = MaterialTheme.colorScheme.surface
+    val inputBackgroundColor = MaterialTheme.colorScheme.surfaceVariant
+    val primaryTextColor = MaterialTheme.colorScheme.onSurface
+    val secondaryTextColor = MaterialTheme.colorScheme.outline
+    val textOnPrimary = MaterialTheme.colorScheme.onPrimary
+
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background) // Use global theme background color
+            .background(backgroundColor)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-                .background(colors.cardBackground) // Use global theme card background color
+                .background(cardSurfaceColor)
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -124,20 +119,20 @@ fun LoginScreenContent(
                     text = "Welcome back",
                     fontSize = 28.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = colors.textPrimary // Use theme primary text color
+                    color = primaryTextColor
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .size(8.dp)
                             .clip(CircleShape)
-                            .background(primaryGreen)
+                            .background(primaryColor)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "sign in to access your account",
                         fontSize = 14.sp,
-                        color = colors.textSecondary // Use theme secondary color
+                        color = secondaryTextColor
                     )
                 }
             }
@@ -147,7 +142,7 @@ fun LoginScreenContent(
                 value = email,
                 onValueChange = { email = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Enter your email", color = colors.textSecondary.copy(alpha = 0.7f)) },
+                placeholder = { Text("Enter your email", color = secondaryTextColor.copy(alpha = 0.7f)) },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Email,
                     imeAction = ImeAction.Next
@@ -157,19 +152,19 @@ fun LoginScreenContent(
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent,
-                    focusedContainerColor = colors.inputBackground, // Use theme input background
-                    unfocusedContainerColor = colors.inputBackground,
-                    disabledContainerColor = colors.inputBackground,
-                    cursorColor = primaryGreen,
-                    focusedTextColor = colors.textPrimary,
-                    unfocusedTextColor = colors.textPrimary,
+                    focusedContainerColor = inputBackgroundColor,
+                    unfocusedContainerColor = inputBackgroundColor,
+                    disabledContainerColor = inputBackgroundColor,
+                    cursorColor = primaryColor,
+                    focusedTextColor = primaryTextColor,
+                    unfocusedTextColor = primaryTextColor,
                 ),
                 shape = RoundedCornerShape(12.dp),
                 trailingIcon = {
                     Icon(
                         imageVector = Icons.Filled.Email,
                         contentDescription = "Email Icon",
-                        tint = colors.textSecondary // Use theme secondary color
+                        tint = secondaryTextColor
                     )
                 }
             )
@@ -181,7 +176,7 @@ fun LoginScreenContent(
                 value = password,
                 onValueChange = { password = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Password", color = colors.textSecondary.copy(alpha = 0.7f)) },
+                placeholder = { Text("Password", color = secondaryTextColor.copy(alpha = 0.7f)) },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
                     imeAction = ImeAction.Done
@@ -192,12 +187,12 @@ fun LoginScreenContent(
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent,
-                    focusedContainerColor = colors.inputBackground, // Use theme input background
-                    unfocusedContainerColor = colors.inputBackground,
-                    disabledContainerColor = colors.inputBackground,
-                    cursorColor = primaryGreen,
-                    focusedTextColor = colors.textPrimary,
-                    unfocusedTextColor = colors.textPrimary,
+                    focusedContainerColor = inputBackgroundColor,
+                    unfocusedContainerColor = inputBackgroundColor,
+                    disabledContainerColor = inputBackgroundColor,
+                    cursorColor = primaryColor,
+                    focusedTextColor = primaryTextColor,
+                    unfocusedTextColor = primaryTextColor,
                 ),
                 shape = RoundedCornerShape(12.dp),
                 trailingIcon = {
@@ -205,7 +200,7 @@ fun LoginScreenContent(
                         Icon(
                             imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
                             contentDescription = if (passwordVisible) "Hide password" else "Show password",
-                            tint = colors.textSecondary // Use theme secondary color
+                            tint = secondaryTextColor
                         )
                     }
                 }
@@ -224,22 +219,22 @@ fun LoginScreenContent(
                         checked = rememberMe,
                         onCheckedChange = { rememberMe = it },
                         colors = CheckboxDefaults.colors(
-                            checkedColor = primaryGreen,
-                            uncheckedColor = colors.textSecondary // Use theme secondary color
+                            checkedColor = primaryColor,
+                            uncheckedColor = secondaryTextColor
                         ),
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
                         text = "Remember me",
                         fontSize = 12.sp,
-                        color = colors.textSecondary, // Use theme secondary color
+                        color = secondaryTextColor,
                         modifier = Modifier.padding(start = 4.dp)
                     )
                 }
                 TextButton(onClick = { navController.navigate("forgot_password") }) {
                     Text(
                         text = "Forgot password?",
-                        color = primaryGreen,
+                        color = primaryColor,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -248,19 +243,19 @@ fun LoginScreenContent(
 
             Spacer(modifier = Modifier.height(40.dp))
 
-            // Next button
+            // --- 1. Next button (Primary action) ---
             Button(
                 onClick = { navController.navigate("HomeScreen") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = primaryGreen),
+                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
             ) {
                 Text(
                     text = "Next",
-                    color = Color.White,
+                    color = textOnPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -268,9 +263,81 @@ fun LoginScreenContent(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = "Next",
-                    tint = Color.White
+                    tint = textOnPrimary
                 )
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- 2. Social Login Buttons (Side-by-Side Row) ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Google Button
+                OutlinedButton(
+                    onClick = { /* Handle Google Login */ },
+                    modifier = Modifier
+                        .weight(1f) // Takes up half the space
+                        .height(36.dp)
+                        .padding(end = 6.dp), // Spacing between buttons
+                    shape = RoundedCornerShape(50.dp), // 20.dp border radius
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = Color.Transparent,
+                        contentColor = primaryTextColor
+                    ),
+                    border = BorderStroke( // Fixed compilation error by using BorderStroke
+                        width = 1.dp,
+                        color = Color(0xFF4285F4) // Google Blue
+                    )
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.google),
+                        contentDescription = "Login with Google",
+                        modifier = Modifier.size(24.dp)
+                            .padding(end = 8.dp),
+                        tint = Color.Unspecified
+                    )
+                    Text(
+                        text = "Google",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                // Facebook Button
+                OutlinedButton(
+                    onClick = { /* Handle Facebook Login */ },
+                    modifier = Modifier
+                        .weight(1f) // Takes up half the space
+                        .height(36.dp)
+                        .padding(start = 6.dp), // Spacing between buttons
+                    shape = RoundedCornerShape(50.dp), // 20.dp border radius
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = Color.Transparent,
+                        contentColor = primaryTextColor
+                    ),
+                    border = BorderStroke( // Fixed compilation error by using BorderStroke
+                        width = 1.dp,
+                        color = Color(0xFF1877F2) // Facebook Blue
+                    )
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.facebook),
+                        contentDescription = "Login with Facebook",
+                        modifier = Modifier.size(24.dp)
+                            .padding(end = 8.dp),
+                        tint = Color(0xFF1877F2)
+                    )
+                    Text(
+                        text = "Facebook",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -279,11 +346,11 @@ fun LoginScreenContent(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "New member ? ", color = colors.textPrimary, fontSize = 14.sp) // Use theme primary color
+                Text(text = "New member ? ", color = primaryTextColor, fontSize = 14.sp)
                 TextButton(onClick = { navController.navigate("SignupScreen") }) {
                     Text(
                         text = "Register now",
-                        color = primaryGreen,
+                        color = primaryColor,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -292,60 +359,6 @@ fun LoginScreenContent(
 
             Spacer(modifier = Modifier.height(60.dp))
         }
-
-        // --- Dark Mode Toggle Button (Top Right) ---
-        DayNightSwitch(
-            isDarkTheme = isDarkTheme,
-            onToggle = onThemeToggle, // Uses the state setter from LoginScreenWrapper
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 24.dp, end = 24.dp)
-        )
-    }
-}
-
-// --- Custom Day/Night Switch Composable (KEPT AS IS) ---
-@Composable
-fun DayNightSwitch(
-    isDarkTheme: Boolean,
-    onToggle: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    switchWidth: Dp = 100.dp,
-    switchHeight: Dp = 50.dp,
-    thumbSize: Dp = 40.dp
-) {
-    // Animate the horizontal offset of the thumb
-    val thumbOffset by animateDpAsState(
-        if (isDarkTheme) (switchWidth - thumbSize - 5.dp) else 5.dp,
-        animationSpec = tween(300)
-    )
-
-    Box(
-        modifier = modifier
-            .width(switchWidth)
-            .height(switchHeight)
-            .clip(RoundedCornerShape(switchHeight / 2))
-            .background(Color.Transparent)
-            .clickable { onToggle(!isDarkTheme) },
-        contentAlignment = Alignment.CenterStart
-    ) {
-        // Background image based on theme
-        Image(
-            painter = painterResource(
-                id = if (isDarkTheme) R.drawable.night_background_switch else R.drawable.day_background_switch
-            ),
-            contentDescription = "Theme switch background",
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // Draggable thumb
-        Box(
-            modifier = Modifier
-                .offset(x = thumbOffset)
-                .size(thumbSize)
-                .clip(CircleShape)
-                .background(Color.White)
-        )
     }
 }
 
@@ -353,6 +366,10 @@ fun DayNightSwitch(
 @Preview(showBackground = true, widthDp = 360, heightDp = 720)
 @Composable
 fun LoginScreenPreview() {
-    // Call the wrapper to provide the necessary AppTheme context for preview
-    LoginScreenWrapper(navController = rememberNavController())
+    // Assuming 'tn.esprit.dam.ui.theme.DAMTheme' is your actual theme function.
+    tn.esprit.dam.ui.theme.DAMTheme(darkTheme = false) {
+        LoginScreen(
+            navController = rememberNavController()
+        )
+    }
 }

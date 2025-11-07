@@ -14,9 +14,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -32,9 +32,33 @@ import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+// ----------------------------------------------------------------------------------
+// --- IMPORTANT: Signature Modified to accept Theme State and Toggle Function ---
+// ----------------------------------------------------------------------------------
+@Composable
+fun VerificationScreen(
+    navController: NavController,
+    // Add parameters for theme state management (It only reads isDarkTheme for colors)
+    isDarkTheme: Boolean = false,
+    onToggleTheme: () -> Unit = {} // Kept for consistency, but unused here
+) {
+    VerificationScreenContent(navController)
+}
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VerificationScreen(navController: NavController) {
+fun VerificationScreenContent(navController: NavController) {
+    // ACCESS COLORS VIA MATERIALTHEME
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val inputBackgroundColor = MaterialTheme.colorScheme.surfaceVariant
+    val primaryTextColor = MaterialTheme.colorScheme.onBackground
+    val secondaryTextColor = MaterialTheme.colorScheme.outline
+
+    // Fallback for the back button background (using dark surface/card color)
+    val backButtonBackground = MaterialTheme.colorScheme.surface
+
     // Constants
     val codeLength = 6
 
@@ -53,24 +77,12 @@ fun VerificationScreen(navController: NavController) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // Colors
-    val primaryGreen = Color(0xFF4CAF50)
-    val inputBackground = Color(0xFFF5F5F5)
-    val textColor = Color.Black
-    val grayColor = Color.Gray
-
     // Countdown Timer logic
     LaunchedEffect(timerRunning) {
         if (timerRunning) {
             val timer = object : CountDownTimer(timeLeft * 1000L, 1000L) {
-                override fun onTick(millisUntilFinished: Long) {
-                    timeLeft = (millisUntilFinished / 1000).toInt()
-                }
-
-                override fun onFinish() {
-                    timeLeft = 0
-                    timerRunning = false
-                }
+                override fun onTick(millisUntilFinished: Long) { timeLeft = (millisUntilFinished / 1000).toInt() }
+                override fun onFinish() { timeLeft = 0; timerRunning = false }
             }
             timer.start()
         }
@@ -89,7 +101,7 @@ fun VerificationScreen(navController: NavController) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.White)
+                .background(backgroundColor) // Dynamic background
                 .padding(24.dp)
                 .padding(paddingValues)
         ) {
@@ -104,18 +116,19 @@ fun VerificationScreen(navController: NavController) {
                     text = "Almost there",
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
-                    color = textColor,
+                    color = primaryTextColor // Dynamic primary text color
+                    ,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
                 val annotatedDescription = buildAnnotatedString {
-                    withStyle(style = SpanStyle(color = grayColor, fontSize = 16.sp)) {
+                    withStyle(style = SpanStyle(color = secondaryTextColor, fontSize = 16.sp)) {
                         append("Please enter the 6-digit code sent to your\nemail ")
                     }
-                    withStyle(style = SpanStyle(color = primaryGreen, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)) {
+                    withStyle(style = SpanStyle(color = primaryColor, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)) {
                         append("contact.uiuxexperts@gmail.com")
                     }
-                    withStyle(style = SpanStyle(color = grayColor, fontSize = 16.sp)) {
+                    withStyle(style = SpanStyle(color = secondaryTextColor, fontSize = 16.sp)) {
                         append(" for\nverification.")
                     }
                 }
@@ -124,7 +137,7 @@ fun VerificationScreen(navController: NavController) {
                     modifier = Modifier.padding(bottom = 40.dp)
                 )
 
-                // OTP Code Input Fields
+                // OTP Code Input Fields (Dynamic Colors)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -134,14 +147,12 @@ fun VerificationScreen(navController: NavController) {
                         BasicTextField(
                             value = digit,
                             onValueChange = { newValue ->
-                                // 1. Handle deletion (Back key with empty field)
                                 if (newValue.isEmpty() && digit.isEmpty() && index > 0) {
                                     val newOtpCode = otpCode.toMutableList()
                                     newOtpCode[index - 1] = ""
                                     otpCode = newOtpCode
                                     focusRequesters[index - 1].requestFocus()
                                 }
-                                // 2. Handle insertion (Digit input)
                                 else if (newValue.length <= 1 && newValue.all { it.isDigit() }) {
                                     val newOtpCode = otpCode.toMutableList()
                                     newOtpCode[index] = newValue
@@ -159,12 +170,12 @@ fun VerificationScreen(navController: NavController) {
                             modifier = Modifier
                                 .size(50.dp)
                                 .focusRequester(focusRequesters[index])
-                                .background(inputBackground, RoundedCornerShape(12.dp))
+                                .background(inputBackgroundColor, RoundedCornerShape(12.dp)) // Dynamic input background
                                 .clip(RoundedCornerShape(12.dp))
                                 .wrapContentHeight(Alignment.CenterVertically)
                                 .padding(top = 10.dp, bottom = 10.dp),
                             textStyle = MaterialTheme.typography.headlineSmall.copy(
-                                color = textColor,
+                                color = primaryTextColor, // Dynamic primary text color
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 20.sp,
                                 textAlign = TextAlign.Center
@@ -183,28 +194,23 @@ fun VerificationScreen(navController: NavController) {
 
                 Spacer(modifier = Modifier.height(40.dp))
 
-                // Verify Button
+                // Verify Button (Dynamic Color)
                 Button(
                     onClick = {
                         val fullCode = otpCode.joinToString("")
                         if (fullCode.length == codeLength && fullCode.all { it.isDigit() }) {
                             scope.launch {
-                                // 1. Show Success Snackbar
                                 snackbarHostState.showSnackbar(
                                     message = "Verification successful!",
                                     withDismissAction = true,
                                     duration = SnackbarDuration.Short
                                 )
-                                // 2. Delay for 0.6 seconds
                                 delay(600)
-
-                                // 3. Navigate
                                 navController.navigate("LoginScreen") {
                                     popUpTo(navController.graph.startDestinationId) { inclusive = true }
                                 }
                             }
                         } else {
-                            // Show error Snackbar if code is incomplete/invalid
                             scope.launch {
                                 snackbarHostState.showSnackbar(
                                     message = "Please enter the complete 6-digit code.",
@@ -219,13 +225,13 @@ fun VerificationScreen(navController: NavController) {
                         .height(56.dp)
                         .clip(RoundedCornerShape(12.dp)),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = primaryGreen
+                        containerColor = primaryColor // Dynamic primary color
                     ),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
                 ) {
                     Text(
                         text = "Verify",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -233,7 +239,7 @@ fun VerificationScreen(navController: NavController) {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Resend Code Section
+                // Resend Code Section (Dynamic Colors)
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -248,10 +254,9 @@ fun VerificationScreen(navController: NavController) {
                                         duration = SnackbarDuration.Short
                                     )
                                 }
-                                // Restart timer and reset focus
                                 timeLeft = 30
                                 timerRunning = true
-                                otpCode = List(codeLength) { "" } // Clear input fields
+                                otpCode = List(codeLength) { "" }
                                 focusRequesters.first().requestFocus()
                             }
                         },
@@ -259,36 +264,37 @@ fun VerificationScreen(navController: NavController) {
                     ) {
                         Text(
                             text = "Didn't receive any code? Resend Again",
-                            color = if (timerRunning) grayColor else primaryGreen,
+                            color = if (timerRunning) secondaryTextColor else primaryColor, // Dynamic colors
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
                     Text(
                         text = "Request a new code in ${String.format("%02d", timeLeft)}s",
-                        color = grayColor,
+                        color = secondaryTextColor, // Dynamic secondary color
                         fontSize = 12.sp
                     )
                 }
             }
 
-            // Back Button (Bottom-left aligned)
+            // Back Button (Bottom-left aligned, Dynamic Color)
             IconButton(
-                // --- MODIFIED: Navigate explicitly to "SignupScreen" ---
                 onClick = { navController.navigate("SignupScreen") },
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(bottom = 24.dp)
                     .size(56.dp)
                     .clip(CircleShape)
-                    .background(Color.Black)
+                    .background(backButtonBackground) // Dynamic back button background
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back to Signup",
-                    tint = Color.White
+                    tint = MaterialTheme.colorScheme.onSurface // Text/Icon color on surface
                 )
             }
+
+            // --- REMOVED: Theme Toggle Button ---
         }
     }
 }
@@ -296,5 +302,8 @@ fun VerificationScreen(navController: NavController) {
 @Preview(showBackground = true, widthDp = 360, heightDp = 720)
 @Composable
 fun VerificationScreenPreview() {
+    // Wrap preview in DAMTheme manually for theme context
+    // tn.esprit.dam.ui.theme.DAMTheme(darkTheme = false) {
     VerificationScreen(navController = rememberNavController())
+    // }
 }
