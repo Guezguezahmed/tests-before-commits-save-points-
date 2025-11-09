@@ -9,12 +9,17 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import tn.esprit.dam.screens.EventsScreen
+import tn.esprit.dam.screens.FriendsScreen
 import tn.esprit.dam.screens.HomeScreen
 import tn.esprit.dam.screens.LeaderboardScreen
 import tn.esprit.dam.screens.LoginScreen
+import tn.esprit.dam.screens.PlacmentScreen
 import tn.esprit.dam.screens.ProfileScreen
+import tn.esprit.dam.screens.ProfileScreenSettings
 import tn.esprit.dam.screens.SignupScreen
+import tn.esprit.dam.screens.SocialScreen
 import tn.esprit.dam.screens.SplashScreen
+import tn.esprit.dam.screens.TeamsScreen
 import tn.esprit.dam.screens.VerificationScreen
 import tn.esprit.dam.screens.WelcomeScreen1
 import tn.esprit.dam.screens.WelcomeScreen2
@@ -28,7 +33,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             // FIX 1: Define the dark theme state
-            var darkTheme by remember { mutableStateOf(true) } // Assume starting in dark theme, or load preference
+            var darkTheme by remember { mutableStateOf(true) }
 
             // FIX 2: Create the toggle function to change the state
             val onThemeToggle: () -> Unit = {
@@ -78,12 +83,30 @@ class MainActivity : ComponentActivity() {
                     composable("EventsScreen") {
                         EventsScreen(navController = navController)
                     }
-                    composable("share") {}
+                    composable("SocialScreen") {
+                        SocialScreen(navController = navController)
+                    }
+                    composable("ProfileScreenSettings") {
+                        // FIX: Pass 'darkTheme' to ProfileScreenSettings (Resolves line 93 error)
+                        ProfileScreenSettings(
+                            navController = navController,
+                            darkTheme = darkTheme,
+                            onThemeToggle = onThemeToggle )
+                    }
+                    composable("FriendsScreen") {
+                        FriendsScreen(navController = navController)
+                    }
+                    composable("TeamsScreen") {
+                        TeamsScreen(navController = navController)
+                    }
+                    composable("PlacmentsScreen") {
+                        PlacmentScreen(navController = navController)
+                    }
                     composable("ProfileScreen") {
-                        // FIX 4: Pass the required 'onThemeToggle' parameter
+                        // FIX: The parameters are now correctly defined in the ProfileScreen Composable
                         ProfileScreen(
                             navController = navController,
-                            onThemeToggle = onThemeToggle // <--- This resolves the compilation error
+                            darkTheme = darkTheme // <-- New required parameter
                         )
                     }
                 }

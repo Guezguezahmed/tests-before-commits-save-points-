@@ -79,6 +79,8 @@ dependencies {
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.palette.ktx)
+    implementation(libs.androidx.room.ktx)
 
     // Testing / Tooling
     debugImplementation("androidx.compose.ui:ui-tooling")

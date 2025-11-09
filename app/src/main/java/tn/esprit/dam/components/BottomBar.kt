@@ -23,7 +23,7 @@ sealed class Screen(val route: String, val icon: ImageVector) {
     object Home : Screen("HomeScreen", Icons.Default.Home)
     object Leaderboard : Screen("leaderboardScreen", Icons.Default.Leaderboard)
     object Events : Screen("EventsScreen", Icons.Default.EmojiEvents)
-    object Share : Screen("share", Icons.AutoMirrored.Filled.Send)
+    object Share : Screen("SocialScreen", Icons.Default.Groups)
     object Profile : Screen("ProfileScreen", Icons.Default.Person)
 }
 
@@ -55,9 +55,19 @@ fun HomeBottomNavigationBar(navController: NavHostController) {
                 onClick = {
                     if (currentRoute != screen.route && routeExists) {
                         navController.navigate(screen.route) {
+                            // This ensures that hitting the back button from a destination
+                            // in the bottom nav doesn't take you back to the app start
                             popUpTo(navController.graph.startDestinationId) {
                                 saveState = true
                             }
+                            // Avoids recreating the same screen multiple times
+                            launchSingleTop = true
+                            // Restores the previous state (e.g., scroll position)
+                            restoreState = true
+                        }
+                    } else if (currentRoute != screen.route) {
+                        // Handle navigation to a route that might not be the start destination
+                        navController.navigate(screen.route) {
                             launchSingleTop = true
                             restoreState = true
                         }
