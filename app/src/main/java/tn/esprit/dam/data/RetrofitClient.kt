@@ -33,11 +33,7 @@ object RetrofitClient {
         val requestUrl = request.url.toString()
         val requestMethod = request.method
         val startTime = System.currentTimeMillis()
-        
-        Log.d("Retrofit", "═══════════════════════════════════════════════════")
-        Log.d("Retrofit", "REQUEST: $requestMethod $requestUrl")
-        Log.d("Retrofit", "Request started at: ${java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date(startTime))}")
-        
+
         // Log request body if present
         val requestBody = request.body
         if (requestBody != null) {
