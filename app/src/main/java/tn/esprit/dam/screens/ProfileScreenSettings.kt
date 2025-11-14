@@ -26,8 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.viewmodel.compose.viewModel
 import tn.esprit.dam.R
 import tn.esprit.dam.ui.theme.DAMTheme
+import tn.esprit.dam.models.AuthViewModel
 
 // Helper data structure for settings items (Unchanged)
 private data class SettingItemData(
@@ -43,7 +45,8 @@ private data class SettingItemData(
 fun ProfileScreenSettings(
     navController: NavController,
     darkTheme: Boolean, // Explicitly pass the current theme state
-    onThemeToggle: () -> Unit
+    onThemeToggle: () -> Unit,
+    viewModel: AuthViewModel = viewModel()
 ) {
     // State to control the visibility of the dialog
     var showLogoutDialog by remember { mutableStateOf(false) }
@@ -194,7 +197,9 @@ fun ProfileScreenSettings(
         LogoutConfirmationDialog(
             onDismiss = { showLogoutDialog = false },
             onConfirmLogout = {
-                // Example navigation to LoginScreen
+                // Call logout to clear token and remember me preference
+                viewModel.logout()
+                // Navigate to LoginScreen
                 navController.navigate("LoginScreen") {
                     popUpTo(navController.graph.id) { inclusive = true }
                 }

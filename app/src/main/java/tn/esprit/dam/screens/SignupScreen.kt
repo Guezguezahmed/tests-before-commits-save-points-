@@ -92,8 +92,13 @@ fun SignupScreen(
     SignupScreenContent(navController, viewModel, uiState)
 }
 
-// Roles for the dropdown
-private val roles = listOf("JOUEUR", "OWNER", "ARBITRE")
+// Roles mapping
+private val roleMap = mapOf(
+    "Player" to "JOUEUR",
+    "Referee" to "ARBITRE",
+    "Stadium Owner" to "OWNER"
+)
+
 // API expects "YYYY-MM-DD". We display "dd/MM/yyyy"
 private val DISPLAY_DATE_FORMAT = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
 private val API_DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -114,32 +119,38 @@ fun SignupScreenContent(
     val secondaryTextColor = MaterialTheme.colorScheme.outline
     val errorColor = MaterialTheme.colorScheme.error
 
-    // State for new and existing input fields (matching DTO: prenom, nom, email, tel, age, password, role)
-    var firstName by remember { mutableStateOf("") } // prenom (used for Name in UI)
-    var lastName by remember { mutableStateOf("") } // nom (used for Surname in UI)
+    // Tab state
+    val tabs = listOf("Player", "Referee", "Stadium Owner")
+    var selectedTabIndex by remember { mutableStateOf(0) }
+    
+    // Stage state (3 stages)
+    var currentStage by remember { mutableStateOf(1) }
+    
+    // Form state - Stage 1: Full name (combined) and username
+    var fullName by remember { mutableStateOf("") } // Combined name and surname
+    var username by remember { mutableStateOf("") }
+    
+    // Form state - Stage 2: Contact info
     var email by remember { mutableStateOf("") }
-    var phoneNumber by remember { mutableStateOf("") } // tel
-    var birthDateText by remember { mutableStateOf("") } // age (for display)
-    var selectedRole by remember { mutableStateOf<String?>(null) } // role
+    var phoneNumber by remember { mutableStateOf("") }
+    var birthDateText by remember { mutableStateOf("") }
+    
+    // Form state - Stage 3: Security
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
     var agreedToTerms by remember { mutableStateOf(false) }
 
-    // State for new and existing validation errors
-    var firstNameError by remember { mutableStateOf<String?>(null) }
-    var lastNameError by remember { mutableStateOf<String?>(null) }
+    // Validation errors
+    var fullNameError by remember { mutableStateOf<String?>(null) }
+    var usernameError by remember { mutableStateOf<String?>(null) }
     var emailError by remember { mutableStateOf<String?>(null) }
     var phoneError by remember { mutableStateOf<String?>(null) }
     var birthDateError by remember { mutableStateOf<String?>(null) }
-    var roleError by remember { mutableStateOf<String?>(null) }
     var passwordError by remember { mutableStateOf<String?>(null) }
     var confirmPasswordError by remember { mutableStateOf<String?>(null) }
     var termsError by remember { mutableStateOf<String?>(null) }
-
-    // State for Role Dropdown
-    var expanded by remember { mutableStateOf(false) }
 
     // State to track if registration was successful (for showing resend button)
     var registrationSuccessful by remember { mutableStateOf(false) }
@@ -185,261 +196,569 @@ fun SignupScreenContent(
         }
     }
 
-    fun validateInputs(): Boolean {
+    // Validation functions for each stage
+    fun validateStage1(): Boolean {
+        fullNameError = null
+        usernameError = null
+        
         var isValid = true
-
-        // Reset all errors first
-        firstNameError = null; lastNameError = null; emailError = null; phoneError = null; birthDateError = null; roleError = null
-        passwordError = null; confirmPasswordError = null; termsError = null
-
-        // Name and Surname Checks (prenom and nom)
-        if (firstName.trim().length < 3) { firstNameError = "Name must be at least 3 characters."; isValid = false }
-        if (lastName.trim().length < 3) { lastNameError = "Surname must be at least 3 characters."; isValid = false }
-
-        // Email Check
-        if (!emailPattern.matcher(email).matches()) { emailError = "Invalid email format."; isValid = false }
-
-        // Phone Check (tel)
-        if (!phoneNumber.matches(Regex("^\\d{8}$"))) { phoneError = "Phone number must be exactly 8 digits."; isValid = false }
-
-        // Birth Date Check (age)
+        val nameParts = fullName.trim().split("\\s+".toRegex())
+        
+        if (fullName.trim().isEmpty()) {
+            fullNameError = "Full name is required."
+            isValid = false
+        } else if (nameParts.size < 2) {
+            fullNameError = "Please enter both first and last name."
+            isValid = false
+        } else if (nameParts.any { it.length < 2 }) {
+            fullNameError = "Each name part must be at least 2 characters."
+            isValid = false
+        }
+        
+        if (username.trim().isEmpty()) {
+            usernameError = "Username is required."
+            isValid = false
+        } else if (username.trim().length < 3) {
+            usernameError = "Username must be at least 3 characters."
+            isValid = false
+        } else if (!username.matches(Regex("^[a-zA-Z0-9_]+$"))) {
+            usernameError = "Username can only contain letters, numbers, and underscores."
+            isValid = false
+        }
+        
+        return isValid
+    }
+    
+    fun validateStage2(): Boolean {
+        emailError = null
+        phoneError = null
+        birthDateError = null
+        
+        var isValid = true
+        
+        if (!emailPattern.matcher(email).matches()) {
+            emailError = "Invalid email format."
+            isValid = false
+        }
+        
+        if (!phoneNumber.matches(Regex("^\\d{8}$"))) {
+            phoneError = "Phone number must be exactly 8 digits."
+            isValid = false
+        }
+        
         if (birthDateText.isEmpty()) {
-            birthDateError = "Birth date is required."; isValid = false
+            birthDateError = "Birth date is required."
+            isValid = false
         } else {
             try {
                 val birthDate = DISPLAY_DATE_FORMAT.parse(birthDateText)
                 val eighteenYearsAgo = Calendar.getInstance().apply { add(Calendar.YEAR, -18) }.time
                 if (birthDate == null || birthDate.after(eighteenYearsAgo)) {
-                    birthDateError = "You must be 18 or older to register."; isValid = false
+                    birthDateError = "You must be 18 or older to register."
+                    isValid = false
                 }
             } catch (e: Exception) {
-                birthDateError = "Invalid date format. Use DD/MM/YYYY."; isValid = false
+                birthDateError = "Invalid date format. Use DD/MM/YYYY."
+                isValid = false
             }
         }
-
-        // Role Check
-        if (selectedRole == null) { roleError = "Please select a role."; isValid = false }
-
-        // Password Checks
-        if (!passwordPattern.matcher(password).matches()) { passwordError = "Password must contain 6+ chars, uppercase, lowercase, and a number."; isValid = false }
-        if (confirmPassword.isEmpty()) { confirmPasswordError = "Please confirm your password."; isValid = false }
-        if (password != confirmPassword) { confirmPasswordError = "Passwords do not match."; isValid = false }
-
-        // Terms Check
-        if (!agreedToTerms) { termsError = "Unchecked"; isValid = false }
-
+        
         return isValid
+    }
+    
+    fun validateStage3(): Boolean {
+        passwordError = null
+        confirmPasswordError = null
+        termsError = null
+        
+        var isValid = true
+        
+        if (!passwordPattern.matcher(password).matches()) {
+            passwordError = "Password must contain 6+ chars, uppercase, lowercase, and a number."
+            isValid = false
+        }
+        
+        if (confirmPassword.isEmpty()) {
+            confirmPasswordError = "Please confirm your password."
+            isValid = false
+        } else if (password != confirmPassword) {
+            confirmPasswordError = "Passwords do not match."
+            isValid = false
+        }
+        
+        if (!agreedToTerms) {
+            termsError = "You must agree to the terms and conditions."
+            isValid = false
+        }
+        
+        return isValid
+    }
+    
+    fun handleNextStage() {
+        when (currentStage) {
+            1 -> if (validateStage1()) currentStage = 2
+            2 -> if (validateStage2()) currentStage = 3
+            3 -> if (validateStage3()) {
+                // All stages validated, proceed with registration
+                val nameParts = fullName.trim().split("\\s+".toRegex())
+                val firstName = nameParts.firstOrNull() ?: ""
+                val lastName = nameParts.drop(1).joinToString(" ")
+                val selectedRole = roleMap[tabs[selectedTabIndex]] ?: "JOUEUR"
+                
+                val birthDate = DISPLAY_DATE_FORMAT.parse(birthDateText)
+                if (birthDate != null) {
+                    val apiBirthDate = API_DATE_FORMAT.format(birthDate)
+                    viewModel.register(
+                        firstName = firstName,
+                        lastName = lastName,
+                        email = email,
+                        phoneNumber = phoneNumber,
+                        birthDate = apiBirthDate,
+                        role = selectedRole,
+                        password = password
+                    )
+                }
+            }
+        }
+    }
+    
+    fun handlePreviousStage() {
+        if (currentStage > 1) {
+            currentStage--
+        }
     }
 
     // ------------------------------------
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Sign Up", color = primaryTextColor) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = primaryTextColor)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = cardSurfaceColor)
+            )
+        },
         content = { paddingValues ->
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(backgroundColor)
+                    .padding(paddingValues)
             ) {
+                // --- Tabs for Role Selection ---
+                TabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    containerColor = cardSurfaceColor,
+                    contentColor = primaryColor
+                ) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            text = { 
+                                Text(
+                                    "Signup as $title",
+                                    fontSize = 12.sp,
+                                    fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        )
+                    }
+                }
+                
+                // --- Progress Indicator ---
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    (1..3).forEach { stage ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (currentStage >= stage) primaryColor else secondaryTextColor.copy(alpha = 0.3f)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = stage.toString(),
+                                    color = if (currentStage >= stage) Color.White else secondaryTextColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            if (stage < 3) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .width(40.dp)
+                                        .height(2.dp)
+                                        .background(
+                                            if (currentStage > stage) primaryColor else secondaryTextColor.copy(alpha = 0.3f)
+                                        )
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                        }
+                    }
+                }
+                
+                // --- Form Content (Scrollable) ---
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
                         .background(cardSurfaceColor)
                         .padding(horizontal = 24.dp)
-                        .padding(paddingValues)
                         .verticalScroll(scrollState),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-
-                    // --- 1. Illustration and Header ---
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 0.dp, bottom = 32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.login_illustration),
-                            contentDescription = "Registration Illustration",
-                            modifier = Modifier.size(150.dp)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    // --- Stage 1: Name and Username ---
+                    if (currentStage == 1) {
                         Text(
-                            text = "Get Started",
-                            fontSize = 28.sp,
+                            text = "Personal Information",
+                            fontSize = 22.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = primaryTextColor
+                            color = primaryTextColor,
+                            modifier = Modifier.fillMaxWidth()
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(primaryColor)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "by creating a free account.",
-                                fontSize = 14.sp,
-                                color = secondaryTextColor
-                            )
-                        }
-                    }
-
-                    // --- 2. Input Fields ---
-
-                    // Name Input (First Name)
-                    TextField(
-                        value = firstName, onValueChange = { firstName = it; firstNameError = null },
-                        modifier = Modifier.fillMaxWidth(), placeholder = { Text("Name", color = secondaryTextColor.copy(alpha = 0.7f)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text), singleLine = true, isError = firstNameError != null,
-                        colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent, focusedContainerColor = inputBackgroundColor, unfocusedContainerColor = inputBackgroundColor, disabledContainerColor = inputBackgroundColor, cursorColor = primaryColor, focusedTextColor = primaryTextColor, unfocusedTextColor = primaryTextColor),
-                        shape = RoundedCornerShape(12.dp),
-                        trailingIcon = { Icon(imageVector = Icons.Default.Person, contentDescription = "Person Icon", tint = if (firstNameError != null) errorColor else secondaryTextColor) }
-                    )
-                    if (firstNameError != null) { Text(firstNameError!!, color = errorColor, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)) }
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Surname Input (Last Name)
-                    TextField(
-                        value = lastName, onValueChange = { lastName = it; lastNameError = null },
-                        modifier = Modifier.fillMaxWidth(), placeholder = { Text("Surname", color = secondaryTextColor.copy(alpha = 0.7f)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text), singleLine = true, isError = lastNameError != null,
-                        colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent, focusedContainerColor = inputBackgroundColor, unfocusedContainerColor = inputBackgroundColor, disabledContainerColor = inputBackgroundColor, cursorColor = primaryColor, focusedTextColor = primaryTextColor, unfocusedTextColor = primaryTextColor),
-                        shape = RoundedCornerShape(12.dp),
-                        trailingIcon = { Icon(imageVector = Icons.Default.Person, contentDescription = "Person Icon", tint = if (lastNameError != null) errorColor else secondaryTextColor) }
-                    )
-                    if (lastNameError != null) { Text(lastNameError!!, color = errorColor, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)) }
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Phone Number Input (tel)
-                    TextField(
-                        value = phoneNumber, onValueChange = { if (it.length <= 8 && it.all { char -> char.isDigit() }) { phoneNumber = it; phoneError = null } },
-                        modifier = Modifier.fillMaxWidth(), placeholder = { Text("Phone number (8 digits)", color = secondaryTextColor.copy(alpha = 0.7f)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), singleLine = true, isError = phoneError != null,
-                        colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent, focusedContainerColor = inputBackgroundColor, unfocusedContainerColor = inputBackgroundColor, disabledContainerColor = inputBackgroundColor, cursorColor = primaryColor, focusedTextColor = primaryTextColor, unfocusedTextColor = primaryTextColor),
-                        shape = RoundedCornerShape(12.dp),
-                        trailingIcon = { Icon(imageVector = Icons.Default.Phone, contentDescription = "Phone Icon", tint = if (phoneError != null) errorColor else secondaryTextColor) }
-                    )
-                    if (phoneError != null) { Text(phoneError!!, color = errorColor, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)) }
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Valid Email Input
-                    TextField(
-                        value = email, onValueChange = { email = it; emailError = null },
-                        modifier = Modifier.fillMaxWidth(), placeholder = { Text("Valid email", color = secondaryTextColor.copy(alpha = 0.7f)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), singleLine = true, isError = emailError != null,
-                        colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent, focusedContainerColor = inputBackgroundColor, unfocusedContainerColor = inputBackgroundColor, disabledContainerColor = inputBackgroundColor, cursorColor = primaryColor, focusedTextColor = primaryTextColor, unfocusedTextColor = primaryTextColor),
-                        shape = RoundedCornerShape(12.dp),
-                        trailingIcon = { Icon(imageVector = Icons.Default.Email, contentDescription = "Email Icon", tint = if (emailError != null) errorColor else secondaryTextColor) }
-                    )
-                    if (emailError != null) { Text(emailError!!, color = errorColor, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)) }
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Birth Date Input (Clickable for Date Picker)
-                    TextField(
-                        value = birthDateText, onValueChange = { /* Prevent manual entry */ },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showDatePicker = true }, // Opens DatePicker
-                        placeholder = { Text("Birth date (DD/MM/YYYY)", color = secondaryTextColor.copy(alpha = 0.7f)) },
-                        enabled = false, // Disable manual text input
-                        isError = birthDateError != null,
-                        colors = TextFieldDefaults.colors(
-                            disabledIndicatorColor = Color.Transparent, // Ensure indicators are hidden
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            focusedContainerColor = inputBackgroundColor,
-                            unfocusedContainerColor = inputBackgroundColor,
-                            disabledContainerColor = inputBackgroundColor,
-                            disabledTextColor = primaryTextColor // Text color when disabled
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        trailingIcon = {
-                            IconButton(onClick = { showDatePicker = true }, enabled = !uiState.isLoading) {
-                                Icon(imageVector = Icons.Default.CalendarToday, contentDescription = "Calendar Icon", tint = if (birthDateError != null) errorColor else secondaryTextColor)
-                            }
-                        }
-                    )
-                    if (birthDateError != null) { Text(birthDateError!!, color = errorColor, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)) }
-                    Spacer(modifier = Modifier.height(16.dp))
-
-
-                    // Role Dropdown Input
-                    ExposedDropdownMenuBox(
-                        expanded = expanded,
-                        onExpandedChange = { if (!uiState.isLoading) expanded = !expanded },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Enter your full name and choose a username",
+                            fontSize = 14.sp,
+                            color = secondaryTextColor,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(32.dp))
+                        
+                        // Full Name Field (Combined)
                         TextField(
-                            value = selectedRole ?: "Select Role",
-                            onValueChange = { /* Read-only */ },
-                            readOnly = true,
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
-                            placeholder = { Text("Select Role", color = secondaryTextColor.copy(alpha = 0.7f)) },
+                            value = fullName,
+                            onValueChange = { fullName = it; fullNameError = null },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Full Name (First and Last)", color = secondaryTextColor.copy(alpha = 0.7f)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                             singleLine = true,
-                            isError = roleError != null,
-                            colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent, focusedContainerColor = inputBackgroundColor, unfocusedContainerColor = inputBackgroundColor, disabledContainerColor = inputBackgroundColor, cursorColor = primaryColor, focusedTextColor = primaryTextColor, unfocusedTextColor = primaryTextColor),
+                            isError = fullNameError != null,
+                            colors = TextFieldDefaults.colors(
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                                focusedContainerColor = inputBackgroundColor,
+                                unfocusedContainerColor = inputBackgroundColor,
+                                disabledContainerColor = inputBackgroundColor,
+                                cursorColor = primaryColor,
+                                focusedTextColor = primaryTextColor,
+                                unfocusedTextColor = primaryTextColor
+                            ),
                             shape = RoundedCornerShape(12.dp),
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
-                        )
-                        ExposedDropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            roles.forEach { role ->
-                                DropdownMenuItem(
-                                    text = { Text(role) },
-                                    onClick = {
-                                        selectedRole = role
-                                        roleError = null
-                                        expanded = false
-                                    },
-                                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Person Icon",
+                                    tint = if (fullNameError != null) errorColor else secondaryTextColor
                                 )
                             }
+                        )
+                        if (fullNameError != null) {
+                            Text(
+                                fullNameError!!,
+                                color = errorColor,
+                                fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Username Field
+                        TextField(
+                            value = username,
+                            onValueChange = { username = it; usernameError = null },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Username", color = secondaryTextColor.copy(alpha = 0.7f)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                            singleLine = true,
+                            isError = usernameError != null,
+                            colors = TextFieldDefaults.colors(
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                                focusedContainerColor = inputBackgroundColor,
+                                unfocusedContainerColor = inputBackgroundColor,
+                                disabledContainerColor = inputBackgroundColor,
+                                cursorColor = primaryColor,
+                                focusedTextColor = primaryTextColor,
+                                unfocusedTextColor = primaryTextColor
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Username Icon",
+                                    tint = if (usernameError != null) errorColor else secondaryTextColor
+                                )
+                            }
+                        )
+                        if (usernameError != null) {
+                            Text(
+                                usernameError!!,
+                                color = errorColor,
+                                fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)
+                            )
                         }
                     }
-                    if (roleError != null) { Text(roleError!!, color = errorColor, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)) }
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Strong Password Input
-                    TextField(
-                        value = password, onValueChange = { password = it; passwordError = null; if (confirmPassword.isNotEmpty()) confirmPasswordError = null },
-                        modifier = Modifier.fillMaxWidth(), placeholder = { Text("Strong password", color = secondaryTextColor.copy(alpha = 0.7f)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), singleLine = true, isError = passwordError != null,
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent, focusedContainerColor = inputBackgroundColor, unfocusedContainerColor = inputBackgroundColor, disabledContainerColor = inputBackgroundColor, cursorColor = primaryColor, focusedTextColor = primaryTextColor, unfocusedTextColor = primaryTextColor),
-                        shape = RoundedCornerShape(12.dp),
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = if (passwordVisible) "Hide password" else "Show password", tint = if (passwordError != null) errorColor else secondaryTextColor)
+                    
+                    // --- Stage 2: Contact Information ---
+                    if (currentStage == 2) {
+                        Text(
+                            text = "Contact Information",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = primaryTextColor,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Enter your contact details",
+                            fontSize = 14.sp,
+                            color = secondaryTextColor,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(32.dp))
+                        
+                        // Email Field
+                        TextField(
+                            value = email,
+                            onValueChange = { email = it; emailError = null },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Valid email", color = secondaryTextColor.copy(alpha = 0.7f)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            singleLine = true,
+                            isError = emailError != null,
+                            colors = TextFieldDefaults.colors(
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                                focusedContainerColor = inputBackgroundColor,
+                                unfocusedContainerColor = inputBackgroundColor,
+                                disabledContainerColor = inputBackgroundColor,
+                                cursorColor = primaryColor,
+                                focusedTextColor = primaryTextColor,
+                                unfocusedTextColor = primaryTextColor
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Email,
+                                    contentDescription = "Email Icon",
+                                    tint = if (emailError != null) errorColor else secondaryTextColor
+                                )
                             }
+                        )
+                        if (emailError != null) {
+                            Text(
+                                emailError!!,
+                                color = errorColor,
+                                fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)
+                            )
                         }
-                    )
-                    if (passwordError != null) { Text(passwordError!!, color = errorColor, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)) }
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Confirm Password Input (New Field)
-                    TextField(
-                        value = confirmPassword, onValueChange = { confirmPassword = it; confirmPasswordError = null },
-                        modifier = Modifier.fillMaxWidth(), placeholder = { Text("Confirm password", color = secondaryTextColor.copy(alpha = 0.7f)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), singleLine = true, isError = confirmPasswordError != null,
-                        visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent, focusedContainerColor = inputBackgroundColor, unfocusedContainerColor = inputBackgroundColor, disabledContainerColor = inputBackgroundColor, cursorColor = primaryColor, focusedTextColor = primaryTextColor, unfocusedTextColor = primaryTextColor),
-                        shape = RoundedCornerShape(12.dp),
-                        trailingIcon = {
-                            IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
-                                Icon(imageVector = if (confirmPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = if (confirmPasswordVisible) "Hide confirm password" else "Show confirm password", tint = if (confirmPasswordError != null) errorColor else secondaryTextColor)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Phone Number Field
+                        TextField(
+                            value = phoneNumber,
+                            onValueChange = { if (it.length <= 8 && it.all { char -> char.isDigit() }) { phoneNumber = it; phoneError = null } },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Phone number (8 digits)", color = secondaryTextColor.copy(alpha = 0.7f)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            singleLine = true,
+                            isError = phoneError != null,
+                            colors = TextFieldDefaults.colors(
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                                focusedContainerColor = inputBackgroundColor,
+                                unfocusedContainerColor = inputBackgroundColor,
+                                disabledContainerColor = inputBackgroundColor,
+                                cursorColor = primaryColor,
+                                focusedTextColor = primaryTextColor,
+                                unfocusedTextColor = primaryTextColor
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Phone,
+                                    contentDescription = "Phone Icon",
+                                    tint = if (phoneError != null) errorColor else secondaryTextColor
+                                )
                             }
+                        )
+                        if (phoneError != null) {
+                            Text(
+                                phoneError!!,
+                                color = errorColor,
+                                fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)
+                            )
                         }
-                    )
-                    if (confirmPasswordError != null) { Text(confirmPasswordError!!, color = errorColor, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)) }
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // --- 3. Terms and Conditions Checkbox (Dynamic Colors) ---
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Birth Date Field
+                        TextField(
+                            value = birthDateText,
+                            onValueChange = { /* Prevent manual entry */ },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showDatePicker = true },
+                            placeholder = { Text("Birth date (DD/MM/YYYY)", color = secondaryTextColor.copy(alpha = 0.7f)) },
+                            enabled = false,
+                            isError = birthDateError != null,
+                            colors = TextFieldDefaults.colors(
+                                disabledIndicatorColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                focusedContainerColor = inputBackgroundColor,
+                                unfocusedContainerColor = inputBackgroundColor,
+                                disabledContainerColor = inputBackgroundColor,
+                                disabledTextColor = primaryTextColor
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            trailingIcon = {
+                                IconButton(onClick = { showDatePicker = true }, enabled = !uiState.isLoading) {
+                                    Icon(
+                                        imageVector = Icons.Default.CalendarToday,
+                                        contentDescription = "Calendar Icon",
+                                        tint = if (birthDateError != null) errorColor else secondaryTextColor
+                                    )
+                                }
+                            }
+                        )
+                        if (birthDateError != null) {
+                            Text(
+                                birthDateError!!,
+                                color = errorColor,
+                                fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)
+                            )
+                        }
+                    }
+                    
+                    // --- Stage 3: Security ---
+                    if (currentStage == 3) {
+                        Text(
+                            text = "Security",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = primaryTextColor,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Create a strong password",
+                            fontSize = 14.sp,
+                            color = secondaryTextColor,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(32.dp))
+                        
+                        // Password Field
+                        TextField(
+                            value = password,
+                            onValueChange = { password = it; passwordError = null; if (confirmPassword.isNotEmpty()) confirmPasswordError = null },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Strong password", color = secondaryTextColor.copy(alpha = 0.7f)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true,
+                            isError = passwordError != null,
+                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            colors = TextFieldDefaults.colors(
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                                focusedContainerColor = inputBackgroundColor,
+                                unfocusedContainerColor = inputBackgroundColor,
+                                disabledContainerColor = inputBackgroundColor,
+                                cursorColor = primaryColor,
+                                focusedTextColor = primaryTextColor,
+                                unfocusedTextColor = primaryTextColor
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                                        tint = if (passwordError != null) errorColor else secondaryTextColor
+                                    )
+                                }
+                            }
+                        )
+                        if (passwordError != null) {
+                            Text(
+                                passwordError!!,
+                                color = errorColor,
+                                fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Confirm Password Field
+                        TextField(
+                            value = confirmPassword,
+                            onValueChange = { confirmPassword = it; confirmPasswordError = null },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Confirm password", color = secondaryTextColor.copy(alpha = 0.7f)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true,
+                            isError = confirmPasswordError != null,
+                            visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            colors = TextFieldDefaults.colors(
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                                focusedContainerColor = inputBackgroundColor,
+                                unfocusedContainerColor = inputBackgroundColor,
+                                disabledContainerColor = inputBackgroundColor,
+                                cursorColor = primaryColor,
+                                focusedTextColor = primaryTextColor,
+                                unfocusedTextColor = primaryTextColor
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            trailingIcon = {
+                                IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                                    Icon(
+                                        imageVector = if (confirmPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (confirmPasswordVisible) "Hide confirm password" else "Show confirm password",
+                                        tint = if (confirmPasswordError != null) errorColor else secondaryTextColor
+                                    )
+                                }
+                            }
+                        )
+                        if (confirmPasswordError != null) {
+                            Text(
+                                confirmPasswordError!!,
+                                color = errorColor,
+                                fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Terms Checkbox
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -454,78 +773,91 @@ fun SignupScreenContent(
                                 modifier = Modifier.size(20.dp)
                             )
                             val termsText = buildAnnotatedString {
-                                withStyle(style = SpanStyle(color = primaryTextColor, fontSize = 12.sp)) { append("By checking the box you agree to our ") }
-                                withStyle(style = SpanStyle(color = primaryColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)) { append("Terms") }
-                                withStyle(style = SpanStyle(color = primaryTextColor, fontSize = 12.sp)) { append(" and ") }
-                                withStyle(style = SpanStyle(color = primaryColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)) { append("Conditions") }
+                                withStyle(style = SpanStyle(color = primaryTextColor, fontSize = 12.sp)) {
+                                    append("By checking the box you agree to our ")
+                                }
+                                withStyle(style = SpanStyle(color = primaryColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)) {
+                                    append("Terms")
+                                }
+                                withStyle(style = SpanStyle(color = primaryTextColor, fontSize = 12.sp)) {
+                                    append(" and ")
+                                }
+                                withStyle(style = SpanStyle(color = primaryColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)) {
+                                    append("Conditions")
+                                }
                             }
                             Text(text = termsText, modifier = Modifier.padding(start = 8.dp))
                         }
-                    }
-
-                    Spacer(modifier = Modifier.height(40.dp))
-
-                    // --- 4. Register Button (Dynamic Colors) ---
-                    Button(
-                        onClick = {
-                            if (validateInputs()) {
-                                // CRITICAL STEP: Convert display date (DD/MM/YYYY) to API date (YYYY-MM-DD)
-                                val birthDate = DISPLAY_DATE_FORMAT.parse(birthDateText)
-
-                                if (birthDate != null && selectedRole != null) {
-                                    val apiBirthDate = API_DATE_FORMAT.format(birthDate)
-
-                                    viewModel.register(
-                                        firstName = firstName,
-                                        lastName = lastName,
-                                        email = email,
-                                        phoneNumber = phoneNumber,
-                                        birthDate = apiBirthDate, // <-- This MUST be in YYYY-MM-DD format
-                                        role = selectedRole!!,
-                                        password = password
-                                    )
-                                } else {
-                                    scope.launch {
-                                        // Should be caught by validateInputs, but a fallback just in case
-                                        snackbarHostState.showSnackbar("Missing required data (Date or Role). Please check inputs.", duration = SnackbarDuration.Short)
-                                        scrollState.animateScrollTo(0)
-                                    }
-                                }
-                            } else {
-                                // Scroll to the top to show the first error easily
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Please correct the errors above.", duration = SnackbarDuration.Short)
-                                    scrollState.animateScrollTo(0)
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
-                        enabled = !uiState.isLoading // Disable button while loading
-                    ) {
-                        if (uiState.isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 3.dp
-                            )
-                        } else {
+                        if (termsError != null) {
                             Text(
-                                text = "Register",
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.SemiBold
+                                termsError!!,
+                                color = errorColor,
+                                fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = "Register",
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(40.dp))
+                    
+                    // --- Navigation Buttons ---
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Previous Button
+                        if (currentStage > 1) {
+                            OutlinedButton(
+                                onClick = { handlePreviousStage() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(56.dp)
+                                    .padding(end = 8.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color.Transparent,
+                                    contentColor = primaryColor
+                                ),
+                                border = BorderStroke(1.dp, primaryColor)
+                            ) {
+                                Text("Previous", color = primaryColor, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        } else {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                        
+                        // Next/Register Button
+                        Button(
+                            onClick = { handleNextStage() },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(56.dp)
+                                .padding(start = if (currentStage > 1) 8.dp else 0.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+                            enabled = !uiState.isLoading
+                        ) {
+                            if (uiState.isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    strokeWidth = 3.dp
+                                )
+                            } else {
+                                Text(
+                                    text = if (currentStage == 3) "Register" else "Next",
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = if (currentStage == 3) "Register" else "Next",
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
                         }
                     }
 

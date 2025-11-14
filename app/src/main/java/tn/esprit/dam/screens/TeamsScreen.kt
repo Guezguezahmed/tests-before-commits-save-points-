@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import tn.esprit.dam.components.AnimatedCard
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -109,6 +110,8 @@ val CaptainColor = Color(0xFFE5B01E) // Gold for Captain tag/crown
 val MemberCountColor = Color(0xFFE0E0E0) // Light grey text on cards
 val StatLabelColor = Color(0xFFB0BEC5) // Light grey text for Wins/LossES/Rate labels
 val StatValueColor = Color(0xFFFFFFFF) // White text for stat values
+private val TeamAcceptButtonColor = Color(0xFF4CAF50) // Green for accept button
+private val TeamDeclineButtonColor = Color(0xFFF44336) // Red for decline button
 
 // Assuming these were defined globally or in another file, keeping them here for TeamsScreen.kt
 val RatingColor = Color(0xFFFFC107) // Yellow for ratings
@@ -400,15 +403,17 @@ fun ActionButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {} // Added onClick parameter
 ) {
-    Card(
+    AnimatedCard(
+        onClick = onClick,
         modifier = modifier.height(48.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        containerColor = MaterialTheme.colorScheme.surface,
+        defaultElevation = 2.dp,
+        pressedElevation = 6.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(onClick = onClick) // Used the new onClick handler
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
@@ -750,13 +755,13 @@ fun MyTeamsContent(teams: List<Team>, onTeamClick: (Int) -> Unit) {
 
 @Composable
 fun TeamCard(team: Team, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
+    AnimatedCard(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+        containerColor = Color.Transparent,
+        defaultElevation = 4.dp,
+        pressedElevation = 12.dp
     ) {
         Box(
             modifier = Modifier
@@ -947,7 +952,7 @@ fun TeamFormationContent(team: Team) {
                     text = formation,
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSelected) AcceptButtonColor.copy(alpha = 0.9f) else MaterialTheme.colorScheme.surface)
+                        .background(if (isSelected) TeamAcceptButtonColor.copy(alpha = 0.9f) else MaterialTheme.colorScheme.surface)
                         .clickable { currentFormation = formation }
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
@@ -1174,7 +1179,7 @@ fun TeamStatsContent(stats: TeamStats) {
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(bottom = 12.dp)
         )
-        StatProgressBar(label = "Goals Scored", value = stats.goalsScored, max = 200, color = AcceptButtonColor)
+        StatProgressBar(label = "Goals Scored", value = stats.goalsScored, max = 200, color = TeamAcceptButtonColor)
         StatProgressBar(label = "Goals Conceded", value = stats.goalsConceded, max = 100, color = Color.Red)
         StatProgressBar(label = "Clean Sheets", value = stats.cleanSheets, max = 30, color = Color.Blue)
         StatProgressBar(label = "Possession Avg", value = stats.possessionAvg, isPercentage = true, max = 100, color = Color(0xFF9C27B0))
@@ -1325,14 +1330,14 @@ fun InviteRow(invite: TeamInvite, onAccept: () -> Unit, onDecline: () -> Unit) {
                 IconButton(onClick = onDecline, modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(DeclineButtonColor.copy(alpha = 0.2f))) {
-                    Icon(Icons.Filled.Close, contentDescription = "Decline", tint = DeclineButtonColor, modifier = Modifier.size(24.dp))
+                    .background(TeamDeclineButtonColor.copy(alpha = 0.2f))) {
+                    Icon(Icons.Filled.Close, contentDescription = "Decline", tint = TeamDeclineButtonColor, modifier = Modifier.size(24.dp))
                 }
                 IconButton(onClick = onAccept, modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(AcceptButtonColor.copy(alpha = 0.2f))) {
-                    Icon(Icons.Filled.Check, contentDescription = "Accept", tint = AcceptButtonColor, modifier = Modifier.size(24.dp))
+                    .background(TeamAcceptButtonColor.copy(alpha = 0.2f))) {
+                    Icon(Icons.Filled.Check, contentDescription = "Accept", tint = TeamAcceptButtonColor, modifier = Modifier.size(24.dp))
                 }
             }
         }
@@ -1428,7 +1433,7 @@ fun DiscoverTeamRow(team: DiscoverTeam, onJoinRequest: () -> Unit) {
                 }
             }
 
-            val buttonColor = if (team.isRequested) AcceptButtonColor.copy(alpha = 0.5f) else AcceptButtonColor
+            val buttonColor = if (team.isRequested) TeamAcceptButtonColor.copy(alpha = 0.5f) else TeamAcceptButtonColor
             val icon = if (team.isRequested) Icons.Filled.Check else Icons.Filled.GroupAdd
 
             Box(

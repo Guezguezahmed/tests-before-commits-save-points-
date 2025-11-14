@@ -432,7 +432,7 @@ fun LoginScreenContent(
                         modifier = Modifier.padding(start = 4.dp)
                     )
                 }
-                TextButton(onClick = { navController.navigate("forgot_password") }) {
+                TextButton(onClick = { navController.navigate("ForgotPasswordScreen") }) {
                     Text(
                         text = "Forgot password?",
                         color = primaryColor,
@@ -447,7 +447,7 @@ fun LoginScreenContent(
             // 1. Next button (Primary action) - NOW CALLS THE VIEWMODEL
             Button(
                 onClick = {
-                    viewModel.login(email, password)
+                    viewModel.login(email, password, rememberMe)
                 },
                 modifier = Modifier
                     .fillMaxWidth()

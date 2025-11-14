@@ -4,18 +4,23 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.* // Import remember and mutableStateOf
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import tn.esprit.dam.screens.EventsScreen
+import tn.esprit.dam.screens.ForgetPasswordScreen
 import tn.esprit.dam.screens.FriendsScreen
 import tn.esprit.dam.screens.HomeScreen
 import tn.esprit.dam.screens.LeaderboardScreen
 import tn.esprit.dam.screens.LoginScreen
+import tn.esprit.dam.screens.PasswordChangedScreen
 import tn.esprit.dam.screens.PlacmentScreen
 import tn.esprit.dam.screens.ProfileScreen
 import tn.esprit.dam.screens.ProfileScreenSettings
+import tn.esprit.dam.screens.SetNewPasswordScreen
 import tn.esprit.dam.screens.SignupScreen
 import tn.esprit.dam.screens.SocialScreen
 import tn.esprit.dam.screens.SplashScreen
@@ -44,70 +49,187 @@ class MainActivity : ComponentActivity() {
             DAMTheme(darkTheme = darkTheme) {
                 val navController = rememberNavController()
 
+                // Define slide animation for navigation transitions
+                val slideInAnimation = slideInHorizontally(
+                    initialOffsetX = { fullWidth -> fullWidth },
+                    animationSpec = tween(300)
+                ) + fadeIn(animationSpec = tween(300))
+                
+                val slideOutAnimation = slideOutHorizontally(
+                    targetOffsetX = { fullWidth -> -fullWidth },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+                
+                // Define slide animation for bottom navigation (less aggressive)
+                val bottomNavSlideIn = slideInHorizontally(
+                    initialOffsetX = { it / 3 },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+                
+                val bottomNavSlideOut = slideOutHorizontally(
+                    targetOffsetX = { -it / 3 },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+
                 // Define the NavHost for navigation
                 NavHost(
                     navController = navController,
                     startDestination = "splash" // Start with splash screen
                 ) {
-                    composable("splash") {
+                    composable(
+                        route = "splash",
+                        enterTransition = { fadeIn(animationSpec = tween(300)) },
+                        exitTransition = { fadeOut(animationSpec = tween(300)) }
+                    ) {
                         SplashScreen(navController = navController)
                     }
-                    composable("welcome_screen_1") {
+                    composable(
+                        route = "welcome_screen_1",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
                         WelcomeScreen1(navController = navController)
                     }
-                    composable("welcome_screen_2") {
+                    composable(
+                        route = "welcome_screen_2",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
                         WelcomeScreen2(navController = navController)
                     }
-                    composable("welcome_screen_3") {
+                    composable(
+                        route = "welcome_screen_3",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
                         WelcomeScreen3(navController = navController)
                     }
-                    composable("LoginScreen") {
+                    composable(
+                        route = "LoginScreen",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
                         LoginScreen(navController = navController)
                     }
-                    composable("SignUpScreen") {
+                    composable(
+                        route = "SignUpScreen",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
                         SignupScreen(navController = navController)
                     }
-                    composable("VerificationScreen") {
+                    composable(
+                        route = "VerificationScreen",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
                         VerificationScreen(navController = navController)
                     }
 
-                    // Bottom navigation screens
-                    composable("HomeScreen") {
+                    // Bottom navigation screens with smoother transitions
+                    composable(
+                        route = "HomeScreen",
+                        enterTransition = { bottomNavSlideIn },
+                        exitTransition = { bottomNavSlideOut },
+                        popEnterTransition = { bottomNavSlideIn },
+                        popExitTransition = { bottomNavSlideOut }
+                    ) {
                         HomeScreen(navController = navController)
                     }
-                    composable("leaderboardScreen") {
+                    composable(
+                        route = "leaderboardScreen",
+                        enterTransition = { bottomNavSlideIn },
+                        exitTransition = { bottomNavSlideOut },
+                        popEnterTransition = { bottomNavSlideIn },
+                        popExitTransition = { bottomNavSlideOut }
+                    ) {
                         LeaderboardScreen(navController = navController)
                     }
 
                     // Add placeholders for other bottom navigation items
-                    composable("EventsScreen") {
+                    composable(
+                        route = "EventsScreen",
+                        enterTransition = { bottomNavSlideIn },
+                        exitTransition = { bottomNavSlideOut },
+                        popEnterTransition = { bottomNavSlideIn },
+                        popExitTransition = { bottomNavSlideOut }
+                    ) {
                         EventsScreen(navController = navController)
                     }
-                    composable("SocialScreen") {
+                    composable(
+                        route = "SocialScreen",
+                        enterTransition = { bottomNavSlideIn },
+                        exitTransition = { bottomNavSlideOut },
+                        popEnterTransition = { bottomNavSlideIn },
+                        popExitTransition = { bottomNavSlideOut }
+                    ) {
                         SocialScreen(navController = navController)
                     }
-                    composable("ProfileScreenSettings") {
+                    composable(
+                        route = "ProfileScreenSettings",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
                         // FIX: Pass 'darkTheme' to ProfileScreenSettings (Resolves line 93 error)
                         ProfileScreenSettings(
                             navController = navController,
                             darkTheme = darkTheme,
                             onThemeToggle = onThemeToggle )
                     }
-                    composable("FriendsScreen") {
+                    composable(
+                        route = "FriendsScreen",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
                         FriendsScreen(navController = navController)
                     }
-                    composable("TeamsScreen") {
+                    composable(
+                        route = "TeamsScreen",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
                         TeamsScreen(navController = navController)
                     }
-                    composable("PlacmentsScreen") {
+                    composable(
+                        route = "PlacmentsScreen",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
                         PlacmentScreen(navController = navController)
                     }
-                    composable("ProfileScreen") {
+                    composable(
+                        route = "ProfileScreen",
+                        enterTransition = { bottomNavSlideIn },
+                        exitTransition = { bottomNavSlideOut },
+                        popEnterTransition = { bottomNavSlideIn },
+                        popExitTransition = { bottomNavSlideOut }
+                    ) {
                         // FIX: The parameters are now correctly defined in the ProfileScreen Composable
                         ProfileScreen(
                             navController = navController,
                             darkTheme = darkTheme // <-- New required parameter
                         )
+                    }
+                    composable(
+                        route = "ForgotPasswordScreen",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
+                        ForgetPasswordScreen(navController = navController)
+                    }
+                    composable(
+                        route = "SetNewPasswordScreen",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
+                        SetNewPasswordScreen(navController = navController)
+                    }
+                    composable(
+                        route = "PasswordChangedScreen",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
+                        PasswordChangedScreen(navController = navController)
                     }
                 }
             }

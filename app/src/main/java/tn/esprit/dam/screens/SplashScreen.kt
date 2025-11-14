@@ -22,15 +22,20 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.TextStyle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
-
-
+import android.util.Log
 import tn.esprit.dam.R
+import tn.esprit.dam.models.AuthViewModel
 
 @Composable
-fun SplashScreen(navController: NavController) {
+fun SplashScreen(
+    navController: NavController,
+    viewModel: AuthViewModel = viewModel()
+) {
     // --- Animation States ---
     val infiniteTransition = rememberInfiniteTransition()
+    val uiState = viewModel.uiState
 
     // 1. Horizontal movement from left (-screen width) to center, then right (screen width)
     val horizontalOffset by infiniteTransition.animateFloat(
@@ -126,11 +131,39 @@ fun SplashScreen(navController: NavController) {
         )
     }
 
-    // Navigate after 4 seconds
+    // Track navigation to prevent multiple navigations
+    var hasNavigated by remember { mutableStateOf(false) }
+    var authCheckStarted by remember { mutableStateOf(false) }
+    
+    // Check authentication state on startup
     LaunchedEffect(Unit) {
-        delay(4000)
-        navController.navigate("welcome_screen_1") {
-            popUpTo("splash") { inclusive = true }
+        Log.d("SplashScreen", "=== SPLASH SCREEN STARTED ===")
+        viewModel.checkAuthState()
+        // Small delay to ensure state update propagates
+        delay(50)
+        authCheckStarted = true
+    }
+    
+    // Navigate when auth state is determined
+    LaunchedEffect(uiState.isLoading, uiState.isAuthenticated, authCheckStarted) {
+        // Only navigate once, when auth check has started, and when loading is complete
+        if (authCheckStarted && !uiState.isLoading && !hasNavigated) {
+            hasNavigated = true
+            
+            if (uiState.isAuthenticated) {
+                // User is remembered - navigate immediately to HomeScreen
+                Log.d("SplashScreen", "✅ User is remembered, navigating to HomeScreen immediately")
+                navController.navigate("HomeScreen") {
+                    popUpTo("splash") { inclusive = true }
+                }
+            } else {
+                // User not remembered - wait for splash animation then navigate to welcome screen
+                Log.d("SplashScreen", "❌ User not remembered, waiting for splash animation")
+                delay(3500) // Wait for remaining splash animation (total 4 seconds)
+                navController.navigate("welcome_screen_1") {
+                    popUpTo("splash") { inclusive = true }
+                }
+            }
         }
     }
 }

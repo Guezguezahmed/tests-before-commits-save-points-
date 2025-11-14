@@ -206,7 +206,7 @@ fun VerificationScreenContent(navController: NavController) {
                                     duration = SnackbarDuration.Short
                                 )
                                 delay(600)
-                                navController.navigate("LoginScreen") {
+                                navController.navigate("SetNewPasswordScreen") {
                                     popUpTo(navController.graph.startDestinationId) { inclusive = true }
                                 }
                             }

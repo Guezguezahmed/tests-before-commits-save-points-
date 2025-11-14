@@ -33,7 +33,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- Core Authentication Logic (Login) ---
 
-    fun login(email: String, password: String) {
+    fun login(email: String, password: String, rememberMe: Boolean = false) {
         if (uiState.isLoading) return
         uiState = uiState.copy(isLoading = true, isAuthenticated = false, errorMessage = null)
 
@@ -47,6 +47,16 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     Log.d("AuthViewModel", "Response: $response")
                     Log.d("AuthViewModel", "Token: ${response.token}, AccessToken: ${response.accessToken}")
                     Log.d("AuthViewModel", "User: ${response.user}")
+                    
+                    // Save remember me preference (or clear it if false)
+                    if (rememberMe) {
+                        repository.saveRememberMe(true)
+                        Log.d("AuthViewModel", "✅ Remember me preference saved: true")
+                    } else {
+                        // Clear remember me if user unchecks it
+                        repository.clearRememberMe()
+                        Log.d("AuthViewModel", "❌ Remember me preference cleared (user unchecked)")
+                    }
                     
                     // Update state with authentication success
                     // Note: Email verification check removed - if login succeeds, allow access
@@ -213,5 +223,51 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearError() {
         uiState = uiState.copy(errorMessage = null)
+    }
+
+    // --- Check Authentication State on Startup ---
+    fun checkAuthState() {
+        viewModelScope.launch {
+            // Set loading state while checking
+            uiState = uiState.copy(isLoading = true)
+            
+            val token = repository.getToken()
+            val rememberMe = repository.getRememberMe()
+            
+            Log.d("AuthViewModel", "=== CHECKING AUTH STATE ===")
+            Log.d("AuthViewModel", "Token present: ${!token.isNullOrBlank()}")
+            Log.d("AuthViewModel", "Token value: ${if (token.isNullOrBlank()) "null/empty" else "present"}")
+            Log.d("AuthViewModel", "Remember me: $rememberMe")
+            
+            if (rememberMe && !token.isNullOrBlank()) {
+                // User is remembered and has a token, restore authentication state
+                Log.d("AuthViewModel", "✅ User is remembered with valid token, restoring auth state")
+                uiState = uiState.copy(
+                    isAuthenticated = true,
+                    isLoading = false
+                )
+            } else {
+                // Clear remember me if token is missing
+                if (rememberMe && token.isNullOrBlank()) {
+                    Log.d("AuthViewModel", "⚠️ Remember me is true but token is missing, clearing remember me")
+                    repository.clearRememberMe()
+                }
+                Log.d("AuthViewModel", "❌ User not remembered or no token, setting isAuthenticated = false")
+                uiState = uiState.copy(
+                    isAuthenticated = false,
+                    isLoading = false
+                )
+            }
+        }
+    }
+
+    // --- Logout ---
+    fun logout() {
+        viewModelScope.launch {
+            repository.clearToken()
+            repository.clearRememberMe()
+            uiState = AuthUiState()
+            Log.d("AuthViewModel", "User logged out, token and remember me cleared")
+        }
     }
 }

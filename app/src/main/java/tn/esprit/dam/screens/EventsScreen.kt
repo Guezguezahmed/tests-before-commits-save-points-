@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import tn.esprit.dam.components.AnimatedCard
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -322,14 +323,15 @@ fun EventCard(event: Event, onClick: () -> Unit) {
 
     val playerRatio = event.playersJoined.toFloat() / event.playersMax.toFloat()
 
-    Card(
+    AnimatedCard(
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .clickable(onClick = onClick),
+            .padding(vertical = 8.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
+        containerColor = MaterialTheme.colorScheme.surface,
+        defaultElevation = cardElevation,
+        pressedElevation = if (isSystemInDarkTheme()) 4.dp else 8.dp
     ) {
         Column {
             // --- Card Header (Colored Box) ---

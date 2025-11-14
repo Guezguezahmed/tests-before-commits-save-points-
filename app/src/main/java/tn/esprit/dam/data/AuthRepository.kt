@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +33,7 @@ class AuthRepository(private val app: Application) {
     // Define DataStore keys
     companion object {
         private val AUTH_TOKEN_KEY = stringPreferencesKey("auth_token")
+        private val REMEMBER_ME_KEY = booleanPreferencesKey("remember_me")
     }
 
     // Get the Retrofit service instance
@@ -53,6 +55,25 @@ class AuthRepository(private val app: Application) {
     suspend fun clearToken() {
         app.dataStore.edit { preferences ->
             preferences.remove(AUTH_TOKEN_KEY)
+        }
+    }
+
+    // --- Remember Me Management ---
+    suspend fun saveRememberMe(rememberMe: Boolean) {
+        app.dataStore.edit { preferences ->
+            preferences[REMEMBER_ME_KEY] = rememberMe
+        }
+    }
+
+    suspend fun getRememberMe(): Boolean {
+        return app.dataStore.data.map { preferences ->
+            preferences[REMEMBER_ME_KEY] ?: false
+        }.first()
+    }
+
+    suspend fun clearRememberMe() {
+        app.dataStore.edit { preferences ->
+            preferences.remove(REMEMBER_ME_KEY)
         }
     }
 

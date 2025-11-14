@@ -3,6 +3,7 @@ package tn.esprit.dam.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import tn.esprit.dam.components.AnimatedCard
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -175,13 +176,13 @@ fun SocialScreenContent(
 
 @Composable
 fun SocialNavCard(item: SocialNavItem, onClick: (String) -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick(item.route) },
+    AnimatedCard(
+        onClick = { onClick(item.route) },
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        containerColor = MaterialTheme.colorScheme.surface,
+        defaultElevation = 2.dp,
+        pressedElevation = 8.dp
     ) {
         Row(
             modifier = Modifier
