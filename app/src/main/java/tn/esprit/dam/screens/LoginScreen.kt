@@ -52,11 +52,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import tn.esprit.dam.R
-import tn.esprit.dam.ui.theme.AppTheme
+import tn.esprit.dam.data.ApiConfig
 import tn.esprit.dam.models.AuthViewModel // <-- CORRECTED IMPORT
 import androidx.compose.runtime.LaunchedEffect
 import android.content.Intent
 import android.net.Uri
+import androidx.core.net.toUri
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -68,9 +69,7 @@ import kotlinx.coroutines.withContext
 fun LoginScreen(
     navController: NavController,
     // Inject the ViewModel
-    viewModel: AuthViewModel = viewModel(),
-    isDarkTheme: Boolean = false,
-    onToggleTheme: () -> Unit = {}
+    viewModel: AuthViewModel = viewModel()
 ) {
     val uiState = viewModel.uiState // Get the current state
     val context = LocalContext.current // Used for Toast messages
@@ -203,9 +202,9 @@ fun LoginScreenContent(
     var showResendVerification by remember { mutableStateOf(false) }
     val context = LocalContext.current // Needed for opening web links
 
-    // URL of your deployed backend (replace YOUR_RENDER_HTTPS_URL)
-    // NOTE: In a real app, this should be read from a config/build file, not hardcoded here
-	val BASE_API_URL = "https://dam-backend-g2p9.onrender.com/api/v1"
+    // Backend base URL (centralized)
+    // Use ApiConfig so all parts of the app point to the same host (local dev: 10.0.2.2)
+    val BASE_API_URL = ApiConfig.WEB_BASE_URL
 
     // --- UI Colors ---
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -546,7 +545,7 @@ fun LoginScreenContent(
                 // Google Button
                 OutlinedButton(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$BASE_API_URL/auth/google"))
+                        val intent = Intent(Intent.ACTION_VIEW, ("$BASE_API_URL/api/v1/auth/google").toUri())
                         context.startActivity(intent)
                     },
                     modifier = Modifier
@@ -581,7 +580,7 @@ fun LoginScreenContent(
                 // Facebook Button
                 OutlinedButton(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$BASE_API_URL/auth/facebook"))
+                        val intent = Intent(Intent.ACTION_VIEW, ("$BASE_API_URL/auth/facebook").toUri())
                         context.startActivity(intent)
                     },
                     modifier = Modifier
@@ -642,9 +641,7 @@ fun LoginScreenContent(
 @Preview(showBackground = true, widthDp = 360, heightDp = 720)
 @Composable
 fun LoginScreenPreview() {
-    tn.esprit.dam.ui.theme.DAMTheme(darkTheme = false) {
-        LoginScreen(
-            navController = rememberNavController()
-        )
+    MaterialTheme {
+        LoginScreen(navController = rememberNavController())
     }
 }

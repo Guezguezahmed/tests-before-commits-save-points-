@@ -209,15 +209,15 @@ fun PasswordChangedContent(
 @Preview(showBackground = true, widthDp = 360, heightDp = 720)
 @Composable
 fun PasswordChangedScreenLightPreview() {
-    DAMTheme(darkTheme = false) {
-        PasswordChangedScreen(navController = rememberNavController(), isDarkTheme = false)
+    MaterialTheme {
+        PasswordChangedScreen(navController = rememberNavController())
     }
 }
 
 @Preview(showBackground = true, widthDp = 360, heightDp = 720)
 @Composable
 fun PasswordChangedScreenDarkPreview() {
-    DAMTheme(darkTheme = true) {
-        PasswordChangedScreen(navController = rememberNavController(), isDarkTheme = true)
+    MaterialTheme {
+        PasswordChangedScreen(navController = rememberNavController())
     }
 }

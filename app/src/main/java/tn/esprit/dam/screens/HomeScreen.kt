@@ -101,11 +101,13 @@ fun HomeScreen(navController: NavHostController) {
 
 // --- Helper Composables (Colors changed to MaterialTheme) ---
 @Composable
-fun TopSection() {
-    // MAPPING: TextBlack -> MaterialTheme.colorScheme.onBackground (since it's on topBackgroundColor/background)
-    // MAPPING: MediumGreen -> MaterialTheme.colorScheme.primary
-    val primaryColor = MaterialTheme.colorScheme.primary
+fun TopSection(viewModel: tn.esprit.dam.models.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel()) {
+    val uiState = viewModel.uiState
+    val user = uiState.user?.user ?: uiState.user?.data
+    val playerName =
+        if (user != null) listOfNotNull(user.prenom, user.nom).joinToString(" ").ifBlank { user.email ?: "Player" } else "Player Name"
     val onBackgroundColor = MaterialTheme.colorScheme.onBackground
+    val primaryColor = MaterialTheme.colorScheme.primary
 
     Row(
         modifier = Modifier
@@ -117,7 +119,7 @@ fun TopSection() {
     ) {
         Column {
             Text("Hi, Welcome Back", color = onBackgroundColor, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Text("Good Morning", color = onBackgroundColor, fontSize = 16.sp)
+            Text(playerName, color = onBackgroundColor, fontSize = 16.sp)
         }
         Icon(
             Icons.Default.Notifications,

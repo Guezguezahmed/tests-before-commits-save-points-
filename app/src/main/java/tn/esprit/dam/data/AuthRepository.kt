@@ -21,6 +21,8 @@ import tn.esprit.dam.models.LoginDto
 import tn.esprit.dam.models.RegisterDto
 import tn.esprit.dam.models.ErrorResponse
 import tn.esprit.dam.models.ResendVerificationDto
+import tn.esprit.dam.models.VerifyEmailDto
+import tn.esprit.dam.models.ResetPasswordDto
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -34,6 +36,11 @@ class AuthRepository(private val app: Application) {
     companion object {
         private val AUTH_TOKEN_KEY = stringPreferencesKey("auth_token")
         private val REMEMBER_ME_KEY = booleanPreferencesKey("remember_me")
+        // Pending verification email key, also used to temporarily store the email during password reset
+        private val PENDING_EMAIL_KEY = stringPreferencesKey("pending_verification_email")
+        // Forgot password context keys
+        private val FORGOT_PASSWORD_EMAIL_KEY = stringPreferencesKey("forgot_password_email")
+        private val FORGOT_PASSWORD_CODE_KEY = stringPreferencesKey("forgot_password_code")
     }
 
     // Get the Retrofit service instance
@@ -77,7 +84,51 @@ class AuthRepository(private val app: Application) {
         }
     }
 
-    // --- API Calls ---
+    // --- Pending Email Management (for Verification/Password Reset) ---
+    suspend fun savePendingVerificationEmail(email: String?) {
+        app.dataStore.edit { preferences ->
+            if (email == null) preferences.remove(PENDING_EMAIL_KEY)
+            else preferences[PENDING_EMAIL_KEY] = email
+        }
+    }
+
+    suspend fun getPendingVerificationEmail(): String? {
+        return app.dataStore.data.map { preferences ->
+            preferences[PENDING_EMAIL_KEY]
+        }.first()
+    }
+
+    suspend fun clearPendingVerificationEmail() {
+        app.dataStore.edit { preferences ->
+            preferences.remove(PENDING_EMAIL_KEY)
+        }
+    }
+
+    // --- Forgot Password Context Management ---
+    suspend fun saveForgotPasswordContext(email: String?, code: String?) {
+        app.dataStore.edit { preferences ->
+            if (email == null) preferences.remove(FORGOT_PASSWORD_EMAIL_KEY)
+            else preferences[FORGOT_PASSWORD_EMAIL_KEY] = email
+            if (code == null) preferences.remove(FORGOT_PASSWORD_CODE_KEY)
+            else preferences[FORGOT_PASSWORD_CODE_KEY] = code
+        }
+    }
+
+    suspend fun getForgotPasswordContext(): Pair<String?, String?> {
+        val prefs = app.dataStore.data.first()
+        val email = prefs[FORGOT_PASSWORD_EMAIL_KEY]
+        val code = prefs[FORGOT_PASSWORD_CODE_KEY]
+        return Pair(email, code)
+    }
+
+    suspend fun clearForgotPasswordContext() {
+        app.dataStore.edit { preferences ->
+            preferences.remove(FORGOT_PASSWORD_EMAIL_KEY)
+            preferences.remove(FORGOT_PASSWORD_CODE_KEY)
+        }
+    }
+
+    // --- API Calls: Authentication ---
     suspend fun login(credentials: LoginDto): Result<AuthResponse> {
         val startTime = System.currentTimeMillis()
         return try {
@@ -85,61 +136,64 @@ class AuthRepository(private val app: Application) {
             Log.d("AuthRepository", "=== LOGIN START ===")
             Log.d("AuthRepository", "Logging in with email: ${credentials.email}")
             Log.d("AuthRepository", "Start time: ${java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date(startTime))}")
-            
+
             // Add timeout wrapper (90 seconds - Render free tier can take time to wake up)
             Log.d("AuthRepository", "Calling authService.login() with 90s timeout...")
             Log.d("AuthRepository", "Note: Render free tier servers may take 30-60s to wake up")
-            val response = withTimeout(90_000) {
+            val httpResponse = withTimeout(90_000) {
                 authService.login(credentials)
             }
-            
+
+            if (!httpResponse.isSuccessful) {
+                throw HttpException(httpResponse)
+            }
+
+            val response = httpResponse.body() ?: throw IOException("Login successful but response body is null.")
+
             val elapsedTime = System.currentTimeMillis() - startTime
             Log.d("AuthRepository", "═══════════════════════════════════════════════════")
             Log.d("AuthRepository", "=== LOGIN API CALL SUCCEEDED ===")
             Log.d("AuthRepository", "Response received after ${elapsedTime}ms")
-            Log.d("AuthRepository", "Response token: ${response.token}")
-            Log.d("AuthRepository", "Response accessToken: ${response.accessToken}")
-            Log.d("AuthRepository", "Response user: ${response.user}")
-            Log.d("AuthRepository", "Response message: ${response.message}")
-            Log.d("AuthRepository", "Full response object: $response")
 
-            // Note: Email verification check removed - if login succeeds, allow access
-            // The backend will handle email verification requirements if needed
+            // Normalize user object: prefer response.user or response.data
             val user = response.user ?: response.data
-            val isEmailVerified = user?.isVerified ?: true // Default to true if not specified
-            
-            Log.d("AuthRepository", "User isVerified: $isEmailVerified (login allowed regardless)")
 
-            // Try to get token from response
-            val tokenToSave = response.token ?: response.accessToken
-            
-            if (tokenToSave.isNullOrBlank()) {
-                // No token in response body - server might use cookies or session-based auth
-                Log.w("AuthRepository", "⚠️ No token in login response body")
-                Log.w("AuthRepository", "Server might be using cookies/session-based authentication")
-                Log.w("AuthRepository", "Allowing login to proceed - token may be in HTTP cookies")
-                // Don't throw error - allow login to proceed
-                // The server might be using cookies for authentication
+            val finalResponse = if (user != null) {
+                // If server set isVerified but not emailVerified, promote the flag so UI treats the account as verified
+                val promotedEmailVerified = user.emailVerified ?: user.isVerified ?: false
+                val normalizedUser = user.copy(
+                    emailVerified = promotedEmailVerified,
+                    isVerified = promotedEmailVerified, // Ensure consistency
+                    verificationCode = null,
+                    codeExpiresAt = null
+                )
+                response.copy(user = normalizedUser, data = normalizedUser)
             } else {
+                response
+            }
+
+            Log.d("AuthRepository", "Normalized response user: ${finalResponse.user}")
+
+            val tokenToSave = finalResponse.token ?: finalResponse.accessToken
+            if (!tokenToSave.isNullOrBlank()) {
                 Log.d("AuthRepository", "Token found in response, saving to DataStore")
                 saveToken(tokenToSave)
+            } else {
+                Log.w("AuthRepository", "⚠️ No token in login response body. Proceeding (assuming session/cookie auth).")
             }
-            
+
             Log.d("AuthRepository", "=== LOGIN SUCCESS ===")
             Log.d("AuthRepository", "═══════════════════════════════════════════════════")
-            Result.success(response)
+            Result.success(finalResponse)
+
         } catch (e: Exception) {
             val elapsedTime = System.currentTimeMillis() - startTime
             Log.e("AuthRepository", "═══════════════════════════════════════════════════")
             Log.e("AuthRepository", "=== LOGIN FAILED ===")
             Log.e("AuthRepository", "Failed after ${elapsedTime}ms")
-            Log.e("AuthRepository", "Exception type: ${e.javaClass.simpleName}")
-            Log.e("AuthRepository", "Exception message: ${e.message}")
-            Log.e("AuthRepository", "═══════════════════════════════════════════════════")
             e.printStackTrace()
-            
-            // Handle timeout specifically
-            if (e is kotlinx.coroutines.TimeoutCancellationException) {
+
+            if (e is TimeoutCancellationException) {
                 Log.e("AuthRepository", "❌ Login request timed out after ${elapsedTime}ms (90s limit)")
                 Result.failure(Exception("Le serveur met trop de temps à répondre. Si c'est un serveur Render en veille, la première requête peut prendre 30-60 secondes. Réessayez dans quelques instants."))
             } else {
@@ -152,152 +206,241 @@ class AuthRepository(private val app: Application) {
         return try {
             Log.d("AuthRepository", "=== REGISTRATION START ===")
             Log.d("AuthRepository", "Registering user with email: ${userData.email}")
-            Log.d("AuthRepository", "RegisterDto: firstName=${userData.firstName}, lastName=${userData.lastName}, email=${userData.email}, phone=${userData.phoneNumber}, birthDate=${userData.birthDate}, role=${userData.role}")
-            
+
             // Add timeout wrapper (90 seconds total timeout)
             val httpResponse = withTimeout(90_000) {
                 authService.register(userData)
             }
-            
-            Log.d("AuthRepository", "HTTP Response Code: ${httpResponse.code()}")
-            Log.d("AuthRepository", "HTTP Response isSuccessful: ${httpResponse.isSuccessful}")
-            Log.d("AuthRepository", "HTTP Response Headers: ${httpResponse.headers()}")
-            
+
             // Check if response is successful (200-299)
             if (!httpResponse.isSuccessful) {
-                val errorBody = httpResponse.errorBody()?.string()
-                Log.e("AuthRepository", "HTTP Error Response: $errorBody")
                 throw HttpException(httpResponse)
             }
-            
-            // Try to parse the response body
-            val response = try {
-                httpResponse.body() ?: run {
-                    Log.w("AuthRepository", "Response body is null, but status code is ${httpResponse.code()}")
-                    // If body is null but status is success, registration likely succeeded
-                    AuthResponse(
-                        message = "Account created successfully. Please check your email for the verification link."
-                    )
-                }
-            } catch (parseError: Exception) {
-                Log.e("AuthRepository", "=== PARSING ERROR ===")
-                Log.e("AuthRepository", "Failed to parse response: ${parseError.message}")
-                Log.e("AuthRepository", "Response code was: ${httpResponse.code()}")
-                Log.e("AuthRepository", "This means the server response structure doesn't match AuthResponse")
-                Log.e("AuthRepository", "The registration might have succeeded on the server, but we can't parse the response")
-                
-                // If HTTP was successful (200-299) but parsing failed, registration likely worked
-                if (httpResponse.isSuccessful) {
-                    AuthResponse(
-                        message = "Account created successfully. Please check your email for the verification link."
-                    )
-                } else {
-                    throw parseError
-                }
-            }
-            
+
+            val response = httpResponse.body() ?: AuthResponse(
+                message = "Account created successfully. Please check your email for the verification code."
+            )
+
             Log.d("AuthRepository", "=== API CALL SUCCEEDED ===")
-            Log.d("AuthRepository", "Response token: ${response.token}")
-            Log.d("AuthRepository", "Response accessToken: ${response.accessToken}")
-            Log.d("AuthRepository", "Response user: ${response.user}")
-            Log.d("AuthRepository", "Response data: ${response.data}")
             Log.d("AuthRepository", "Response message: ${response.message}")
-            Log.d("AuthRepository", "Response success: ${response.success}")
-            Log.d("AuthRepository", "Response status: ${response.status}")
-            Log.d("AuthRepository", "Full response: $response")
 
-            // If we get here, the API call succeeded (no exception thrown)
-            // For email verification flows, the API might not return a token or user object
-            // but still successfully create the account and send verification email
-            
-            // Check both user and data fields
-            val userObject = response.user ?: response.data
             val tokenToSave = response.token ?: response.accessToken
-
             if (!tokenToSave.isNullOrBlank()) {
                 Log.d("AuthRepository", "Token found, saving to DataStore")
-                // Token is present, save it and mark as authenticated
                 saveToken(tokenToSave)
             } else {
                 Log.d("AuthRepository", "No token in response (expected for email verification flow)")
             }
-            
+
+            // Persist pending email so the verification screen can access it
+            val responseEmail = response.email ?: response.user?.email ?: response.data?.email ?: userData.email
+            if (!responseEmail.isNullOrBlank()) {
+                Log.d("AuthRepository", "Persisting pending verification email to DataStore: $responseEmail")
+                savePendingVerificationEmail(responseEmail)
+            }
+
             Log.d("AuthRepository", "=== REGISTRATION SUCCESS ===")
-            // Even if there's no token or user object, if the API call succeeded,
-            // registration was successful (user created, verification email sent)
             Result.success(response)
         } catch (e: Exception) {
             Log.e("AuthRepository", "=== REGISTRATION FAILED ===")
-            Log.e("AuthRepository", "Exception type: ${e.javaClass.simpleName}")
-            Log.e("AuthRepository", "Exception message: ${e.message}")
             e.printStackTrace()
-            
-            // Handle timeout specifically
+
             if (e is TimeoutCancellationException) {
                 Log.e("AuthRepository", "Request timed out after 90 seconds")
                 Result.failure(Exception("Request timed out. The server is taking too long to respond. Please check your internet connection and try again."))
-            } else if (e is SerializationException) {
-                // Handle serialization error - registration might have succeeded
-                Log.e("AuthRepository", "Serialization error - registration might have succeeded on server")
-                Log.e("AuthRepository", "Returning success with verification message")
-                Result.success(
-                    AuthResponse(
-                        message = "Account created successfully. Please check your email for the verification link."
-                    )
-                )
             } else {
                 Result.failure(handleNetworkException(e, "Registration failed"))
             }
         }
     }
 
+    // --- API Calls: Email Verification ---
+
     suspend fun resendVerification(email: String): Result<AuthResponse> {
         return try {
             Log.d("AuthRepository", "=== RESEND VERIFICATION START ===")
-            Log.d("AuthRepository", "Resending verification email to: $email")
-            
-            // Validate email format
+
             if (email.isBlank() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-                Log.e("AuthRepository", "Invalid email format: $email")
-                return Result.failure(Exception("Invalid email address format. Please check your email and try again."))
+                return Result.failure(Exception("Invalid email address format."))
             }
-            
+
             val emailDto = ResendVerificationDto(email = email.trim())
-            Log.d("AuthRepository", "Request DTO: $emailDto")
-            
-            // Add timeout wrapper (60 seconds)
-            val response = withTimeout(60_000) {
-                Log.d("AuthRepository", "Calling API: POST /auth/resend-verification")
+
+            val httpResponse = withTimeout(60_000) {
                 authService.resendVerification(emailDto)
             }
-            
-            Log.d("AuthRepository", "=== RESEND API CALL SUCCEEDED ===")
-            Log.d("AuthRepository", "Response message: ${response.message}")
-            Log.d("AuthRepository", "Response token: ${response.token}")
-            Log.d("AuthRepository", "Response accessToken: ${response.accessToken}")
-            Log.d("AuthRepository", "Full response: $response")
-            
-            // Check if the response indicates success
-            val successMessage = response.message ?: "Verification email sent successfully"
-            Log.d("AuthRepository", "Success message: $successMessage")
-            
+
+            if (!httpResponse.isSuccessful) {
+                throw HttpException(httpResponse)
+            }
+
+            val response = httpResponse.body() ?: AuthResponse(message = "Verification code resent successfully.")
+
+            Log.d("AuthRepository", "=== RESEND SUCCESS ===")
             Result.success(response)
         } catch (e: Exception) {
             Log.e("AuthRepository", "=== RESEND FAILED ===")
-            Log.e("AuthRepository", "Exception type: ${e.javaClass.simpleName}")
-            Log.e("AuthRepository", "Exception message: ${e.message}")
-            Log.e("AuthRepository", "Email that failed: $email")
             e.printStackTrace()
-            
-            // Handle timeout specifically
+
             if (e is TimeoutCancellationException) {
-                Log.e("AuthRepository", "Request timed out after 60 seconds")
-                Result.failure(Exception("Request timed out. The server is taking too long to respond. Please try again later."))
+                Result.failure(Exception("Request timed out. Please try again."))
             } else {
-                Result.failure(handleNetworkException(e, "Resending verification email failed"))
+                Result.failure(handleNetworkException(e, "Resending verification code failed"))
             }
         }
     }
+
+    suspend fun verifyEmail(code: String, email: String): Result<AuthResponse> {
+        return try {
+            Log.d("AuthRepository", "=== VERIFY EMAIL START ===")
+
+            val dto = VerifyEmailDto(code = code, email = email)
+
+            val httpResponse = withTimeout(60_000) {
+                authService.verifyEmail(dto)
+            }
+
+            if (!httpResponse.isSuccessful) {
+                throw HttpException(httpResponse)
+            }
+
+            val response = httpResponse.body() ?: throw IOException("Verification successful but response body is null.")
+
+            // Clear pending email after successful verification
+            clearPendingVerificationEmail()
+
+            Log.d("AuthRepository", "=== VERIFY EMAIL SUCCESS ===")
+            Result.success(response)
+        } catch (e: Exception) {
+            Log.e("AuthRepository", "=== VERIFY EMAIL FAILED ===")
+            e.printStackTrace()
+            if (e is TimeoutCancellationException) {
+                Result.failure(Exception("Request timed out. Please try again."))
+            } else {
+                Result.failure(handleNetworkException(e, "Verification failed"))
+            }
+        }
+    }
+
+    // --- API Calls: Forgot Password Flow ---
+
+    /**
+     * Step 1: Request a password reset code for the given email.
+     * Maps to: POST /api/v1/auth/forgot-password
+     */
+    suspend fun forgotPassword(email: String): Result<AuthResponse> {
+        return try {
+            Log.d("AuthRepository", "=== FORGOT PASSWORD (STEP 1: SEND CODE) START ===")
+
+            if (email.isBlank() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                return Result.failure(Exception("Invalid email address format."))
+            }
+
+            val dto = ResendVerificationDto(email = email.trim())
+
+            val httpResponse = withTimeout(60_000) {
+                authService.forgotPassword(dto)
+            }
+
+            if (!httpResponse.isSuccessful) {
+                throw HttpException(httpResponse)
+            }
+
+            val response = httpResponse.body() ?: AuthResponse(message = "Password reset code sent to your email.")
+
+            // Persist the email so the next step (Verify Code) can access it
+            savePendingVerificationEmail(email.trim())
+
+            Log.d("AuthRepository", "=== FORGOT PASSWORD (STEP 1) SUCCESS ===")
+            Result.success(response)
+        } catch (e: Exception) {
+            Log.e("AuthRepository", "=== FORGOT PASSWORD (STEP 1) FAILED ===")
+            e.printStackTrace()
+            if (e is TimeoutCancellationException) {
+                Result.failure(Exception("Request timed out. Please try again."))
+            } else {
+                Result.failure(handleNetworkException(e, "Forgot password failed (Sending code)"))
+            }
+        }
+    }
+
+    /**
+     * Step 2: Verify the password reset code.
+     * Maps to: POST /api/v1/auth/forgot-password/verify-code
+     */
+    suspend fun verifyForgotPasswordCode(code: String, email: String): Result<AuthResponse> {
+        return try {
+            Log.d("AuthRepository", "=== FORGOT PASSWORD (STEP 2: VERIFY CODE) START ===")
+
+            val dto = VerifyEmailDto(code = code, email = email)
+
+            val httpResponse = withTimeout(60_000) {
+                authService.verifyForgotPasswordCode(dto)
+            }
+
+            if (!httpResponse.isSuccessful) {
+                throw HttpException(httpResponse)
+            }
+
+            val response = httpResponse.body() ?: AuthResponse(message = "Code verified successfully.")
+
+            // We keep the email in PENDING_EMAIL_KEY for the final reset step (Step 3)
+
+            Log.d("AuthRepository", "=== FORGOT PASSWORD (STEP 2) SUCCESS ===")
+            Result.success(response)
+        } catch (e: Exception) {
+            Log.e("AuthRepository", "=== FORGOT PASSWORD (STEP 2) FAILED ===")
+            e.printStackTrace()
+            if (e is TimeoutCancellationException) {
+                Result.failure(Exception("Request timed out. Please try again."))
+            } else {
+                Result.failure(handleNetworkException(e, "Verify forgot code failed"))
+            }
+        }
+    }
+
+    /**
+     * Step 3: Reset the password using the email, code, and new password.
+     * Maps to: POST /api/v1/auth/forgot-password/reset
+     */
+    suspend fun resetForgotPassword(email: String, code: String, newPassword: String, confirmPassword: String): Result<AuthResponse> {
+        return try {
+            Log.d("AuthRepository", "=== FORGOT PASSWORD (STEP 3: RESET) START ===")
+
+            val dto = ResetPasswordDto(email = email, code = code, newPassword = newPassword, confirmPassword = confirmPassword)
+
+            val httpResponse = withTimeout(60_000) {
+                authService.resetForgotPassword(dto)
+            }
+
+            if (!httpResponse.isSuccessful) {
+                throw HttpException(httpResponse)
+            }
+
+            val response = httpResponse.body() ?: AuthResponse(message = "Password reset successfully. You can now log in.")
+
+            // Clear pending email after successful password reset
+            clearPendingVerificationEmail()
+
+            Log.d("AuthRepository", "=== FORGOT PASSWORD (STEP 3) SUCCESS ===")
+            Result.success(response)
+        } catch (e: Exception) {
+            Log.e("AuthRepository", "=== FORGOT PASSWORD (STEP 3) FAILED ===")
+            e.printStackTrace()
+            if (e is TimeoutCancellationException) {
+                Result.failure(Exception("Request timed out. Please try again."))
+            } else {
+                Result.failure(handleNetworkException(e, "Reset password failed"))
+            }
+        }
+    }
+
+    suspend fun fetchUserById(id: String): tn.esprit.dam.models.User? {
+        val response = authService.getUserById(id)
+        return if (response.isSuccessful) response.body() else null
+    }
+
+    // --- Shared Exception Handling Logic ---
 
     private suspend fun handleNetworkException(e: Exception, contextMessage: String): Exception {
         return withContext(Dispatchers.Main) {
@@ -311,15 +454,16 @@ class AuthRepository(private val app: Application) {
                         null
                     }
                     Log.e("AuthRepository", "Error body: $errorBody")
-                    
+
                     val serverMessage = try {
                         if (errorBody != null && errorBody.isNotBlank()) {
                             try {
+                                // Attempt to parse as standard ErrorResponse
                                 val errorResponse = Json.decodeFromString<ErrorResponse>(errorBody)
                                 errorResponse.message ?: errorResponse.error ?: errorBody
                             } catch (parseError: Exception) {
+                                // If parsing fails, try manual extraction (for non-standard API responses)
                                 Log.e("AuthRepository", "Failed to parse as ErrorResponse, trying manual extraction")
-                                // Try to extract message manually using regex
                                 val messageMatch = Regex("\"message\"\\s*:\\s*\"([^\"]+)\"").find(errorBody)
                                 messageMatch?.groupValues?.get(1) ?: errorBody
                             }
@@ -330,8 +474,8 @@ class AuthRepository(private val app: Application) {
                         Log.e("AuthRepository", "Failed to parse error JSON: ${jsonError.message}")
                         errorBody
                     }
-                    
-                    // Provide user-friendly error messages based on status code
+
+                    // Provide user-friendly error messages based on status code and server response
                     val userFriendlyMessage = when (e.code()) {
                         409 -> serverMessage ?: "This email is already registered. Please use a different email or try logging in."
                         400 -> serverMessage ?: "Invalid request. Please check your input."
@@ -341,7 +485,7 @@ class AuthRepository(private val app: Application) {
                         500 -> serverMessage ?: "Server error. Please try again later."
                         else -> serverMessage ?: e.message() ?: "An error occurred. Please try again."
                     }
-                    
+
                     Log.e("AuthRepository", "Final error message: $userFriendlyMessage")
                     Exception(userFriendlyMessage)
                 }
@@ -354,7 +498,7 @@ class AuthRepository(private val app: Application) {
                     val errorMsg = e.message ?: ""
                     when {
                         errorMsg.contains("Unable to resolve host", ignoreCase = true) ||
-                        errorMsg.contains("No address associated with hostname", ignoreCase = true) -> {
+                                errorMsg.contains("No address associated with hostname", ignoreCase = true) -> {
                             Exception("Erreur de connexion: Impossible de joindre le serveur.\n\nVérifiez:\n• Votre connexion Internet\n• Si le serveur est en ligne (Render peut être en veille)\n• Réessayez dans quelques instants")
                         }
                         else -> {
@@ -367,7 +511,7 @@ class AuthRepository(private val app: Application) {
                     val errorMsg = e.message ?: ""
                     when {
                         errorMsg.contains("Unable to resolve host", ignoreCase = true) ||
-                        errorMsg.contains("No address associated with hostname", ignoreCase = true) -> {
+                                errorMsg.contains("No address associated with hostname", ignoreCase = true) -> {
                             Exception("Erreur de connexion: Impossible de joindre le serveur.\n\nVérifiez:\n• Votre connexion Internet\n• Si le serveur est en ligne (Render peut être en veille)\n• Réessayez dans quelques instants")
                         }
                         errorMsg.contains("timeout", ignoreCase = true) -> {

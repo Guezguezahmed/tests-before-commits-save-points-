@@ -6,10 +6,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
-import androidx.compose.runtime.* // Import remember and mutableStateOf
+import androidx.compose.runtime.*
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import tn.esprit.dam.screens.EventsScreen
 import tn.esprit.dam.screens.ForgetPasswordScreen
 import tn.esprit.dam.screens.FriendsScreen
@@ -18,14 +20,16 @@ import tn.esprit.dam.screens.LeaderboardScreen
 import tn.esprit.dam.screens.LoginScreen
 import tn.esprit.dam.screens.PasswordChangedScreen
 import tn.esprit.dam.screens.PlacmentScreen
-import tn.esprit.dam.screens.ProfileScreen
+import tn.esprit.dam.screens.ProfileScreen // Keep this import
 import tn.esprit.dam.screens.ProfileScreenSettings
+// REMOVED: tn.esprit.dam.screens.ProfileScreenSettings (The function was renamed)
 import tn.esprit.dam.screens.SetNewPasswordScreen
 import tn.esprit.dam.screens.SignupScreen
 import tn.esprit.dam.screens.SocialScreen
 import tn.esprit.dam.screens.SplashScreen
 import tn.esprit.dam.screens.TeamsScreen
 import tn.esprit.dam.screens.VerificationScreen
+import tn.esprit.dam.screens.VerificationResetScreen
 import tn.esprit.dam.screens.WelcomeScreen1
 import tn.esprit.dam.screens.WelcomeScreen2
 import tn.esprit.dam.screens.WelcomeScreen3
@@ -54,18 +58,18 @@ class MainActivity : ComponentActivity() {
                     initialOffsetX = { fullWidth -> fullWidth },
                     animationSpec = tween(300)
                 ) + fadeIn(animationSpec = tween(300))
-                
+
                 val slideOutAnimation = slideOutHorizontally(
                     targetOffsetX = { fullWidth -> -fullWidth },
                     animationSpec = tween(300)
                 ) + fadeOut(animationSpec = tween(300))
-                
+
                 // Define slide animation for bottom navigation (less aggressive)
                 val bottomNavSlideIn = slideInHorizontally(
                     initialOffsetX = { it / 3 },
                     animationSpec = tween(250)
                 ) + fadeIn(animationSpec = tween(250))
-                
+
                 val bottomNavSlideOut = slideOutHorizontally(
                     targetOffsetX = { -it / 3 },
                     animationSpec = tween(250)
@@ -125,6 +129,14 @@ class MainActivity : ComponentActivity() {
                     ) {
                         VerificationScreen(navController = navController)
                     }
+                    composable(
+                        route = "VerificationResetScreen",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
+                        // Dedicated screen for forgot-password verification (separate from signup verification)
+                        VerificationResetScreen(navController = navController)
+                    }
 
                     // Bottom navigation screens with smoother transitions
                     composable(
@@ -167,15 +179,19 @@ class MainActivity : ComponentActivity() {
                     }
                     composable(
                         route = "ProfileScreenSettings",
-                        enterTransition = { slideInAnimation },
-                        exitTransition = { slideOutAnimation }
+                        enterTransition = { bottomNavSlideIn },
+                        exitTransition = { bottomNavSlideOut },
+                        popEnterTransition = { bottomNavSlideIn },
+                        popExitTransition = { bottomNavSlideOut }
                     ) {
-                        // FIX: Pass 'darkTheme' to ProfileScreenSettings (Resolves line 93 error)
+                        // FIX: Pass the required darkTheme and onThemeToggle parameters
                         ProfileScreenSettings(
                             navController = navController,
                             darkTheme = darkTheme,
-                            onThemeToggle = onThemeToggle )
+                            onThemeToggle = onThemeToggle
+                        )
                     }
+
                     composable(
                         route = "FriendsScreen",
                         enterTransition = { slideInAnimation },
@@ -191,12 +207,14 @@ class MainActivity : ComponentActivity() {
                         TeamsScreen(navController = navController)
                     }
                     composable(
-                        route = "PlacmentsScreen",
+                        route = "PlacmentScreen",
                         enterTransition = { slideInAnimation },
                         exitTransition = { slideOutAnimation }
                     ) {
                         PlacmentScreen(navController = navController)
                     }
+
+                    // CONSOLIDATED PROFILE SCREEN ROUTE: This is now the definitive profile screen.
                     composable(
                         route = "ProfileScreen",
                         enterTransition = { bottomNavSlideIn },
@@ -204,12 +222,14 @@ class MainActivity : ComponentActivity() {
                         popEnterTransition = { bottomNavSlideIn },
                         popExitTransition = { bottomNavSlideOut }
                     ) {
-                        // FIX: The parameters are now correctly defined in the ProfileScreen Composable
+                        // FIX: Pass the required darkTheme and onThemeToggle parameters
                         ProfileScreen(
                             navController = navController,
-                            darkTheme = darkTheme // <-- New required parameter
+                            darkTheme = darkTheme,
+                            onThemeToggle = onThemeToggle
                         )
                     }
+
                     composable(
                         route = "ForgotPasswordScreen",
                         enterTransition = { slideInAnimation },
@@ -217,12 +237,19 @@ class MainActivity : ComponentActivity() {
                     ) {
                         ForgetPasswordScreen(navController = navController)
                     }
+                    // FIX FOR THE ERROR: We must define the route to include the 'verificationCode' argument
                     composable(
-                        route = "SetNewPasswordScreen",
+                        route = "SetNewPasswordScreen/{verificationCode}", // Define argument in the route
+                        arguments = listOf(navArgument("verificationCode") { type = NavType.StringType }),
                         enterTransition = { slideInAnimation },
                         exitTransition = { slideOutAnimation }
-                    ) {
-                        SetNewPasswordScreen(navController = navController)
+                    ) { backStackEntry ->
+                        // Retrieve the argument from the backStackEntry
+                        val code = backStackEntry.arguments?.getString("verificationCode") ?: ""
+                        SetNewPasswordScreen(
+                            navController = navController,
+                            verificationCode = code // Pass the retrieved argument to the Composable
+                        )
                     }
                     composable(
                         route = "PasswordChangedScreen",

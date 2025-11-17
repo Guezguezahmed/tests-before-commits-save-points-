@@ -4,6 +4,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.graphics.vector.ImageVector
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 /**
  * Data class representing a single Player in a team.
@@ -49,4 +51,52 @@ data class Team(
     val logoIcon: ImageVector, // Large logo icon for detail screen
     val roster: List<Player>, // List of players in the team
     val formations: List<String>, // List of available formations, like ["4-4-2", "4-3-3"]
+)
+
+// --- User and Profile Data Models ---
+@Serializable
+data class User(
+    @SerialName("_id")
+    val id: String? = null,
+    val prenom: String? = null,
+    val nom: String? = null,
+    val email: String? = null,
+    val age: String? = null,
+    val emailVerified: Boolean? = null,
+    val isVerified: Boolean? = null,
+    val verificationCode: String? = null,
+    val codeExpiresAt: String? = null,
+    val tel: String? = null,
+    val role: String? = null
+)
+
+data class UserProfile(
+    val initials: String,
+    val name: String,
+    val handle: String,
+    val level: Int,
+    val wins: Int,
+    val losses: Int,
+    val winRate: String,
+    val goalsScored: Int,
+    val assists: Int,
+    val cleanSheets: Int,
+    val totalMatches: Int,
+    val favoriteStadium: String,
+    val memberSince: String
+)
+
+data class Achievement(
+    val icon: ImageVector,
+    val iconColor: Color,
+    val title: String,
+    val description: String,
+    val unlocked: Boolean = true
+)
+
+data class MatchResult(
+    val status: String, // "W", "L", "D"
+    val title: String,
+    val date: String,
+    val score: String
 )

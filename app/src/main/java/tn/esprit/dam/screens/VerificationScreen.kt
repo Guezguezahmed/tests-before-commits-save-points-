@@ -1,6 +1,7 @@
 package tn.esprit.dam.screens
 
 import android.os.CountDownTimer
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -31,6 +32,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import tn.esprit.dam.models.AuthViewModel
 
 // ----------------------------------------------------------------------------------
 // --- IMPORTANT: Signature Modified to accept Theme State and Toggle Function ---
@@ -38,17 +40,19 @@ import kotlinx.coroutines.launch
 @Composable
 fun VerificationScreen(
     navController: NavController,
+    // Inject the AuthViewModel so we can call verifyEmail()
+    viewModel: AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     // Add parameters for theme state management (It only reads isDarkTheme for colors)
     isDarkTheme: Boolean = false,
     onToggleTheme: () -> Unit = {} // Kept for consistency, but unused here
 ) {
-    VerificationScreenContent(navController)
+    VerificationScreenContent(navController, viewModel)
 }
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VerificationScreenContent(navController: NavController) {
+fun VerificationScreenContent(navController: NavController, viewModel: AuthViewModel) {
     // ACCESS COLORS VIA MATERIALTHEME
     val primaryColor = MaterialTheme.colorScheme.primary
     val backgroundColor = MaterialTheme.colorScheme.background
@@ -77,6 +81,9 @@ fun VerificationScreenContent(navController: NavController) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    // Display the email we have pending verification (if any)
+    val pendingEmail = viewModel.pendingVerificationEmail ?: viewModel.uiState.user?.user?.email ?: viewModel.uiState.user?.data?.email
+
     // Countdown Timer logic
     LaunchedEffect(timerRunning) {
         if (timerRunning) {
@@ -92,6 +99,9 @@ fun VerificationScreenContent(navController: NavController) {
     LaunchedEffect(Unit) {
         timerRunning = true
         focusRequesters.first().requestFocus()
+        // Ensure we load any persisted pending verification email into the ViewModel when the screen appears
+        Log.d("VerificationScreen", "LaunchedEffect: loading persisted pending verification email into ViewModel")
+        viewModel.loadPendingVerificationEmail()
     }
 
     // --- SCaffold added to host the Snackbar ---
@@ -126,7 +136,7 @@ fun VerificationScreenContent(navController: NavController) {
                         append("Please enter the 6-digit code sent to your\nemail ")
                     }
                     withStyle(style = SpanStyle(color = primaryColor, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)) {
-                        append("contact.uiuxexperts@gmail.com")
+                        append(pendingEmail ?: "your email")
                     }
                     withStyle(style = SpanStyle(color = secondaryTextColor, fontSize = 16.sp)) {
                         append(" for\nverification.")
@@ -199,15 +209,58 @@ fun VerificationScreenContent(navController: NavController) {
                     onClick = {
                         val fullCode = otpCode.joinToString("")
                         if (fullCode.length == codeLength && fullCode.all { it.isDigit() }) {
-                            scope.launch {
-                                snackbarHostState.showSnackbar(
-                                    message = "Verification successful!",
-                                    withDismissAction = true,
-                                    duration = SnackbarDuration.Short
-                                )
-                                delay(600)
-                                navController.navigate("SetNewPasswordScreen") {
-                                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                            // Debug log: show the OTP and the pending email when verify is triggered
+                            Log.d("VerificationScreen", "Verify button pressed. Code=$fullCode, pendingEmail=${viewModel.pendingVerificationEmail}")
+
+                            // Decide which verification method to call depending on flow
+                            if (viewModel.pendingIsForPasswordReset) {
+                                // This is the forgot-password flow
+                                viewModel.verifyForgotPasswordCode(fullCode) { success, message ->
+                                    scope.launch {
+                                        if (success) {
+                                            snackbarHostState.showSnackbar(
+                                                message = message ?: "Code verified!",
+                                                withDismissAction = true,
+                                                duration = SnackbarDuration.Short
+                                            )
+                                            // Navigate to SetNewPasswordScreen to reset password
+                                            delay(600)
+                                            navController.navigate("SetNewPasswordScreen") {
+                                                popUpTo("VerificationScreen") { inclusive = true }
+                                            }
+                                        } else {
+                                            snackbarHostState.showSnackbar(
+                                                message = message ?: "Verification failed: wrong code.",
+                                                withDismissAction = true,
+                                                duration = SnackbarDuration.Short
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Regular account verification flow
+                                viewModel.verifyEmail(fullCode) { success, message ->
+                                    scope.launch {
+                                        if (success) {
+                                            snackbarHostState.showSnackbar(
+                                                message = message ?: "Verification successful!",
+                                                withDismissAction = true,
+                                                duration = SnackbarDuration.Short
+                                            )
+                                            // Navigate to LoginScreen after short delay
+                                            delay(600)
+                                            navController.navigate("LoginScreen") {
+                                                popUpTo("VerificationScreen") { inclusive = true }
+                                            }
+                                        } else {
+                                            // Verification failed (wrong code or server error)
+                                            snackbarHostState.showSnackbar(
+                                                message = message ?: "Verification failed: wrong code.",
+                                                withDismissAction = true,
+                                                duration = SnackbarDuration.Short
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         } else {
@@ -247,12 +300,28 @@ fun VerificationScreenContent(navController: NavController) {
                     TextButton(
                         onClick = {
                             if (!timerRunning) {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        message = "Verification code resent!",
-                                        withDismissAction = true,
-                                        duration = SnackbarDuration.Short
-                                    )
+                                // Use ViewModel to resend using pending email if available
+                                val emailToResend = pendingEmail
+                                if (emailToResend != null) {
+                                    if (viewModel.pendingIsForPasswordReset) {
+                                        // Resend forgot-password code
+                                        viewModel.forgotPassword(emailToResend) { s, m ->
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(m ?: if (s) "Code sent" else "Failed to resend")
+                                            }
+                                        }
+                                    } else {
+                                        // Resend account verification code
+                                        viewModel.resendVerificationEmail(emailToResend)
+                                    }
+                                } else {
+                                    // fallback: show snackbar
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            message = "No email available to resend verification.",
+                                            duration = SnackbarDuration.Short
+                                        )
+                                    }
                                 }
                                 timeLeft = 30
                                 timerRunning = true
@@ -279,7 +348,7 @@ fun VerificationScreenContent(navController: NavController) {
 
             // Back Button (Bottom-left aligned, Dynamic Color)
             IconButton(
-                onClick = { navController.navigate("SignupScreen") },
+                onClick = { navController.popBackStack() },
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(bottom = 24.dp)

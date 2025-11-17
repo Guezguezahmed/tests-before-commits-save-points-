@@ -61,30 +61,42 @@ fun SignupScreen(
     val context = LocalContext.current
 
     // Handle Authentication Success or Failure (Side Effect)
-    LaunchedEffect(uiState.isAuthenticated, uiState.errorMessage) {
+    LaunchedEffect(uiState.isAuthenticated, uiState.errorMessage, viewModel.pendingVerificationEmail) {
+        // If login/registration returned an authenticated user, navigate to Home
         if (uiState.isAuthenticated) {
-            // Success: User is registered and logged in, navigate to Home
             Toast.makeText(context, "Registration successful!", Toast.LENGTH_LONG).show()
             navController.navigate("HomeScreen") {
                 popUpTo("SignupScreen") { inclusive = true }
             }
-        } else if (uiState.errorMessage != null) {
+            return@LaunchedEffect
+        }
+
+        // If pendingVerificationEmail is set, registration created the account and we must verify
+        val pendingEmail = viewModel.pendingVerificationEmail
+        if (!pendingEmail.isNullOrBlank()) {
+            // Show a toast then navigate to VerificationScreen and keep the signup off the back stack
+            Toast.makeText(context, "Account created. Please verify your email: $pendingEmail", Toast.LENGTH_LONG).show()
+            navController.navigate("VerificationScreen") {
+                popUpTo("SignupScreen") { inclusive = true }
+            }
+            return@LaunchedEffect
+        }
+
+        // Fallback: existing message parsing - show toast and optional navigation when message indicates verification required
+        if (uiState.errorMessage != null) {
             val message = uiState.errorMessage
-            // Show error/success message
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-            
-            // Check if registration was successful (even without token/authentication)
-            // This happens in email verification flows
-            if (message.contains("Account created successfully", ignoreCase = true) || 
+
+            if (message.contains("Account created successfully", ignoreCase = true) ||
                 message.contains("check your email", ignoreCase = true) ||
-                message.contains("created successfully", ignoreCase = true)) {
-                // Registration successful - navigate to login screen after a short delay
-                delay(2000) // Show toast for 2 seconds
-                navController.navigate("LoginScreen") {
+                message.contains("created successfully", ignoreCase = true) ||
+                message.contains("verification", ignoreCase = true)) {
+                delay(800)
+                navController.navigate("VerificationScreen") {
                     popUpTo("SignupScreen") { inclusive = true }
                 }
             }
-            
+
             viewModel.clearError()
         }
     }

@@ -8,7 +8,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+// FIX: Ensure all AutoMirrored icons used (ExitToApp, KeyboardArrowRight, Help, and ArrowBack) are explicitly imported.
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -70,7 +73,8 @@ fun ProfileScreenSettings(
     val supportAbout = remember(colorScheme) {
         listOf(
             SettingItemData(Icons.Default.CreditCard, "My Subscription", colorScheme.primary),
-            SettingItemData(Icons.Default.Help, "Help & Support", colorScheme.secondary),
+            // FIX: Icons.AutoMirrored.Filled.Help is correctly used here
+            SettingItemData(Icons.AutoMirrored.Filled.Help, "Help & Support", colorScheme.secondary),
             SettingItemData(Icons.Default.Info, "Terms and Policies", colorScheme.tertiary)
         )
     }
@@ -101,7 +105,8 @@ fun ProfileScreenSettings(
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = textColor)
+                        // FIX: Corrected capitalization from Icons.automirrored to Icons.AutoMirrored to resolve 'Unresolved reference'
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = textColor)
                     }
                 },
                 actions = {
@@ -393,7 +398,7 @@ private fun SettingsListItem(
 
         // Divider
         if (showDivider) {
-            Divider(
+            HorizontalDivider(
                 modifier = Modifier.padding(start = 16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 thickness = 1.dp
@@ -492,11 +497,10 @@ fun ProfileCard(
 fun ProfileScreenSettingsPreview() {
     DAMTheme {
         Surface(color = MaterialTheme.colorScheme.background) {
-            // Previewing Light Theme
             ProfileScreenSettings(
                 navController = rememberNavController(),
                 darkTheme = false,
-                onThemeToggle = {}
+                onThemeToggle = {} // Provide empty lambda for preview
             )
         }
     }

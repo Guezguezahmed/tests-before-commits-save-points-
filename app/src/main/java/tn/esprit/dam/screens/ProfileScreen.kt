@@ -113,38 +113,7 @@ val mockMatches = listOf(
 
 // --- 2. Reusable Composable Components ---
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-// FIX: Replaced custom Row with standard TopAppBar to correctly handle system insets (status bar)
-fun ProfileTopBar(onSettingsClick: () -> Unit) {
-    TopAppBar(
-        title = {
-            // FIX: Title moved to standard slot
-            Text(
-                text = "Profile",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-        },
-        // FIX: Set colors to transparent so the screen background shows through
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.Transparent,
-            titleContentColor = MaterialTheme.colorScheme.onBackground
-        ),
-        actions = {
-            // FIX: Settings button in the correct slot, using the provided lambda
-            IconButton(onClick = onSettingsClick) {
-                Icon(
-                    Icons.Filled.Settings,
-                    contentDescription = "Settings",
-                    tint = MaterialTheme.colorScheme.onBackground
-                )
-            }
-        },
-        // Apply vertical padding to achieve the original spacing look
-        modifier = Modifier.padding(bottom = 8.dp)
-    )
-}
+// NOTE: ProfileTopBar function was removed as requested.
 
 @Composable
 fun MainProfileCard(user: UserProfile) {
@@ -512,6 +481,7 @@ fun FooterDetailRow(icon: ImageVector, title: String, value: String) {
 fun ProfileScreen(
     navController: NavHostController,
     darkTheme: Boolean,
+    onThemeToggle: () -> Unit,
     user: UserProfile = mockUserProfile,
     achievements: List<Achievement> = mockAchievements,
     matches: List<MatchResult> = mockMatches
@@ -524,18 +494,48 @@ fun ProfileScreen(
 
     // WRAPPED IN SCAFFOLD WITH BOTTOM BAR
     Scaffold(
-        // FIX: Replaced custom header with the new TopAppBar composable for correct layout
-        topBar = { ProfileTopBar(onSettingsClick = onSettingsClick) },
-        bottomBar = { HomeBottomNavigationBar(navController = navController) }, // ADDED: Bottom Navigation Bar
+        // The topBar slot is explicitly removed as requested.
+        bottomBar = { HomeBottomNavigationBar(navController = navController) },
         // Use MaterialTheme.colorScheme.background for screen container
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues) // Correctly applies top, bottom, and system bar padding
+                // Apply bottom padding from Scaffold, handle status bar manually
+                .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
         ) {
+            // --- Custom Header Area (Title and Settings Button) ---
+            // Manually creating the header row and handling status bar padding
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding() // Ensures content clears the device status bar
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 16.dp, bottom = 8.dp) // Internal vertical padding
+            ) {
+                // Title (Aligned Start)
+                Text(
+                    text = "Profile",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.align(Alignment.CenterStart)
+                )
+
+                // Settings Button (Aligned End)
+                IconButton(
+                    onClick = onSettingsClick,
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                ) {
+                    Icon(
+                        Icons.Filled.Settings,
+                        contentDescription = "Settings",
+                        tint = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+            }
+
             // Main Profile Card
             MainProfileCard(user = user)
 
@@ -595,6 +595,10 @@ fun ProfileScreen(
 fun PreviewProfileScreen() {
     // Use a placeholder theme for preview since AppTheme isn't imported here
     MaterialTheme {
-        ProfileScreen(navController = rememberNavController(), darkTheme = false)
+        ProfileScreen(
+            navController = rememberNavController(),
+            darkTheme = false,
+            onThemeToggle = {}
+        )
     }
 }
