@@ -20,10 +20,12 @@ import tn.esprit.dam.screens.FriendsScreen
 import tn.esprit.dam.screens.HomeScreen
 import tn.esprit.dam.screens.LeaderboardScreen
 import tn.esprit.dam.screens.LoginScreen
+import tn.esprit.dam.screens.MyStaffScreen
 import tn.esprit.dam.screens.PasswordChangedScreen
 import tn.esprit.dam.screens.PlacmentScreen
 import tn.esprit.dam.screens.ProfileScreen // Keep this import
 import tn.esprit.dam.screens.ProfileScreenSettings
+import tn.esprit.dam.screens.RecruteScreen
 import tn.esprit.dam.screens.SetNewPasswordScreen
 import tn.esprit.dam.screens.SignupScreen
 import tn.esprit.dam.screens.SocialScreen
@@ -131,6 +133,20 @@ class MainActivity : ComponentActivity() {
                         exitTransition = { slideOutAnimation }
                     ) {
                         VerificationScreen(navController = navController)
+                    }
+                    composable(
+                        route = "RecruteScreen",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
+                        RecruteScreen(navController = navController)
+                    }
+                    composable(
+                        route = "MyStaffScreen",
+                        enterTransition = { slideInAnimation },
+                        exitTransition = { slideOutAnimation }
+                    ) {
+                        MyStaffScreen(navController = navController)
                     }
                     composable(
                         route = "VerificationResetScreen",

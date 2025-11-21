@@ -22,6 +22,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
+import tn.esprit.dam.api.StaffApiService
 
 // This object handles the initialization and configuration of the Retrofit HTTP client.
 object RetrofitClient {
@@ -264,6 +265,12 @@ object RetrofitClient {
         return getRetrofit(context).create(TournamentApiService::class.java)
     }
 
+    val staffApiService: StaffApiService by lazy {
+        retrofit.create(StaffApiService::class.java)
+    }
+    val userService: UserService by lazy {
+        retrofit.create(UserService::class.java)
+    }
     val authService: AuthService by lazy {
         retrofit.create(AuthService::class.java)
     }
