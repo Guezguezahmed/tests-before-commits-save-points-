@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -53,21 +54,43 @@ fun ProfileScreenSettings(
 ) {
     // State to control the visibility of the dialog
     var showLogoutDialog by remember { mutableStateOf(false) }
-
     // Dynamic Theme Colors
     val colorScheme = MaterialTheme.colorScheme
     val cardSurfaceColor = colorScheme.surface
     val screenBackgroundColor = colorScheme.background
     val textColor = colorScheme.onSurface
+    val context = LocalContext.current
+    var currentUserRole by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        try {
+            val app = context.applicationContext as android.app.Application
+            val repo = tn.esprit.dam.data.AuthRepository(app)
+            val user = repo.getUser()
+            currentUserRole = user?.role
+        } catch (_: Exception) {
+            currentUserRole = null
+        }
+    }
 
-    // --- Data Definitions ---
-    val accountSettings = remember(colorScheme) {
-        listOf(
-            SettingItemData(Icons.Default.Person, "Edit profile", colorScheme.primary),
+
+// --- Data Definitions ---
+    val accountSettings = remember(colorScheme, currentUserRole) {
+        // Liste de base avec Edit Profile et les autres
+        val listItems = mutableListOf(
+            SettingItemData(Icons.Default.Person, "Edit Profile", colorScheme.primary),
             SettingItemData(Icons.Default.Security, "Security", colorScheme.secondary),
             SettingItemData(Icons.Default.Notifications, "Notifications", colorScheme.tertiary),
             SettingItemData(Icons.Default.Lock, "Privacy", colorScheme.error)
         )
+
+        // Ajouter "Recruter arbitre" seulement si OWNER
+        if (currentUserRole == "OWNER") {
+            listItems.add(
+                SettingItemData(Icons.Default.PersonAdd, "Recruter arbitre", colorScheme.primary)
+            )
+        }
+
+        listItems
     }
 
     val supportAbout = remember(colorScheme) {
@@ -94,6 +117,8 @@ fun ProfileScreenSettings(
             SettingItemData(Icons.AutoMirrored.Filled.ExitToApp, "Log out", colorScheme.error, isAction = true)
         )
     }
+
+
     // --- End Data Definitions ---
 
 
@@ -334,6 +359,8 @@ private fun SettingsListItem(
             isToggled = !isToggled
         } else if (item.title == "Log out") {
             onLogoutClick()
+        } else if (item.title == "Recruter arbitre") {
+            navController.navigate("RecruteScreen")
         }
     }
 
